@@ -1,6 +1,12 @@
-# usage_tray
+# token_usage_tray
+
+[inging88/usage_tray](https://github.com/inging88/usage_tray)를 원작자의 허락을 받아
+[dancingowl/token_usage_tray](https://github.com/dancingowl/token_usage_tray)라는 독립 저장소로 옮긴 프로젝트입니다.
+기존 코드와 커밋 이력을 보존했으며, 원본 프로젝트에 대한 출처를 유지합니다.
 
 Claude Code · Codex · Antigravity 의 남은 사용량을 **작업표시줄(Windows) · 메뉴바(macOS)** 에 띄운다.
+
+Windows는 Claude Code · Codex를 지원하며, Antigravity 연결은 macOS에서만 지원한다.
 
 - 링 길이가 남은 %, 20% 밑이면 빨강. 색이 어느 에이전트인지 알려 준다
 - **윈도우는 에이전트마다 링 하나**, **맥은 링 하나에 가장 급한 에이전트** ([왜 다른가](#아이콘-개수가-os-마다-다른-이유))
@@ -15,7 +21,8 @@ Claude Code · Codex · Antigravity 의 남은 사용량을 **작업표시줄(Wi
 
 ## 다운로드
 
-[Releases](https://github.com/inging88/usage_tray/releases) 에서 자기 OS 파일을 받는다.
+[Releases](https://github.com/dancingowl/token_usage_tray/releases) 에서 자기 OS 파일을 받는다.
+릴리스가 아직 없다면 아래 직접 빌드 절차를 사용한다.
 
 | OS | 파일 |
 |---|---|
@@ -64,10 +71,31 @@ Claude Code · Codex · Antigravity 의 남은 사용량을 **작업표시줄(Wi
 Go 1.26+ 만 있으면 된다. 컴파일러는 필요 없다(`CGO_ENABLED=0`).
 
 ```powershell
-git clone https://github.com/inging88/usage_tray.git
-cd usage_tray
+git clone https://github.com/dancingowl/token_usage_tray.git
+cd token_usage_tray
 powershell -ExecutionPolicy Bypass -File build.ps1 -Run
 ```
+
+`-Run`을 빼면 빌드만 한다. 결과는 `dist\usage-tray.exe`이며, 일반 실행은 자동 시작을 등록하지 않는다.
+
+### 수정 전 검증
+
+Go 설치 후 새 PowerShell에서 아래를 실행한다. 기존 UsageTray는 종료한 상태에서 확인한다.
+개발용 데이터 폴더는 저장 데이터만 분리하며, 로그인 정보와 로컬 포트는 그대로 사용한다.
+
+```powershell
+$env:CGO_ENABLED = '0'
+$env:USAGE_TRAY_DATA_DIR = Join-Path $env:TEMP 'token-usage-tray-dev'
+go test ./...
+go vet ./...
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+go run . -once
+.\dist\usage-tray.exe
+```
+
+배포 exe는 콘솔 창을 만들지 않도록 빌드하므로, 출력 확인에는 `go run . -once`를 사용한다.
+`-once`는 사용량을 조회하고 상태 파일을 저장한 뒤 종료하며, 트레이와 HTTP 서버는 띄우지 않는다.
+검증 후에는 트레이 메뉴에서 종료하고 `Remove-Item Env:USAGE_TRAY_DATA_DIR`로 데이터 경로 설정을 해제한다.
 
 앱 아이콘은 `rsrc_windows.syso` 로 exe 에 박혀 있다(리포에 들어 있어 그냥 빌드하면 된다).
 그림을 바꾸려면 `assets/icon.png` 를 갈아 끼우고 `assets/icon.ico` · `assets/favicon32.png`
@@ -79,9 +107,12 @@ go run github.com/akavel/rsrc@latest -ico assets\icon.ico -arch amd64 -o rsrc_wi
 
 ## 파일이 놓이는 곳
 
-`%LOCALAPPDATA%\usage-tray\` — 에이전트마다 갈라 띄우므로 `state-<agent>.json` ·
-`status-<agent>.txt` · `tokens-<agent>.json` 과 `usage-tray.log` 다. 지울 때는 실행 파일과
-이 폴더만 삭제하면 된다. `USAGE_TRAY_DATA_DIR` 을 주면 그 폴더를 대신 쓴다(검증용).
+`%LOCALAPPDATA%\usage-tray\`에 상태·토큰 집계·캐시와 `usage-tray.log`를 저장한다.
+에이전트가 둘 이상이면 프로세스를 나누어 `state-<agent>.json` · `status-<agent>.txt` ·
+`tokens-<agent>.json` · `tokens-cache-<agent>.json`을 사용한다. 에이전트가 하나인 일반 실행은
+접미사 없이 `state.json` · `status.txt` · `tokens.json` · `tokens-cache.json`을 사용한다.
+`-only`를 지정하면 하나만 실행해도 에이전트 접미사가 붙는다. 지울 때는 실행 파일과
+이 폴더를 삭제하면 된다. `USAGE_TRAY_DATA_DIR`을 주면 그 폴더를 대신 쓴다(검증용).
 
 ---
 
@@ -111,8 +142,8 @@ mv UsageTray.app /Applications/               # 계속 둘 자리로 옮긴다
 빌드가 안 된다. Xcode Command Line Tools 만 있으면 된다 — `xcode-select --install`.
 
 ```bash
-git clone https://github.com/inging88/usage_tray.git
-cd usage_tray
+git clone https://github.com/dancingowl/token_usage_tray.git
+cd token_usage_tray
 ./build.sh          # dist/UsageTray.app (arm64 + amd64 유니버설)
 open dist/UsageTray.app
 ```
@@ -180,7 +211,8 @@ Antigravity 는 앱이 떠 있을 때만 잡히고, 자격증명을 루프백 �
 **윈도우는 가른다.** 실행 파일이 자기 자신을 `-only claude` · `-only codex` 로 띄우고 부모는
 빠진다. 작업표시줄에는 아이콘이 나란히 붙어도 문제가 없고, 에이전트마다 링 하나가 한눈에
 낫다. 상세 화면은 어느 쪽을 눌러도 전부 합쳐 보여 준다
-(claude 47113 · codex 47114 · antigravity 47115).
+(claude 47113 · codex 47114). 에이전트 하나만 사용하는 기본 실행은 47113을 사용한다.
+`-only antigravity`의 47115는 macOS에서만 사용한다.
 
 **맥은 못 가른다.** `.app` 본체가 자식을 띄우고 빠지는 순간 LaunchServices 가 앱이 끝난 것으로
 보고, 번들 밖에서 도는 자식은 `NSStatusItem` 을 못 얻는다 — 메뉴바에 **아무것도 안 뜬다.**
