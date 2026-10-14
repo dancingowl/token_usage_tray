@@ -7,15 +7,67 @@ import (
 	"path/filepath"
 )
 
-// All agent processes share one choice. State and usage caches remain separate.
-type traySettings struct {
-	IconStyle iconStyle `json:"icon_style"`
+type agentVisibility struct {
+	Claude      bool `json:"claude"`
+	Codex       bool `json:"codex"`
+	Antigravity bool `json:"antigravity"`
 }
 
-func defaultTraySettings() traySettings { return traySettings{IconStyle: iconStyleDonut} }
+type alertRule struct {
+	Enabled   bool `json:"enabled"`
+	Threshold int  `json:"threshold"`
+	Recovery  bool `json:"recovery"`
+}
+
+// All agent processes share preferences. Credentials never enter this file.
+type traySettings struct {
+	IconStyle     iconStyle            `json:"icon_style"`
+	DisplayWindow string               `json:"display_window"`
+	VisibleAgents agentVisibility      `json:"visible_agents"`
+	PollSeconds   int                  `json:"poll_seconds"`
+	AlertsEnabled bool                 `json:"alerts_enabled"`
+	NotifyLimits  bool                 `json:"notify_limits"`
+	AlertRules    map[string]alertRule `json:"alert_rules"`
+}
+
+func defaultTraySettings() traySettings {
+	return traySettings{
+		IconStyle: iconStyleDonut, DisplayWindow: "week", PollSeconds: 60,
+		VisibleAgents: agentVisibility{true, true, true}, AlertsEnabled: true, NotifyLimits: true,
+		AlertRules: map[string]alertRule{
+			"claude5h": {true, 10, true}, "claude7d": {true, 20, true},
+			"codex5h": {true, 10, true}, "codex7d": {true, 20, true}, "antigravity": {true, 20, true},
+		},
+	}
+}
 
 func validIconStyle(style iconStyle) bool {
 	return style == iconStyleDonut || style == iconStyleNumber
+}
+
+func validateTraySettings(settings traySettings) error {
+	if !validIconStyle(settings.IconStyle) {
+		return fmt.Errorf("지원하지 않는 아이콘 모양: %q", settings.IconStyle)
+	}
+	if settings.DisplayWindow != "week" && settings.DisplayWindow != "short" && settings.DisplayWindow != "urgent" {
+		return fmt.Errorf("표시 한도는 주간, 단기 또는 가장 부족한 한도여야 합니다")
+	}
+	if settings.PollSeconds < 60 || settings.PollSeconds > 3600 {
+		return fmt.Errorf("갱신 주기는 60~3600초여야 합니다")
+	}
+	defaults := defaultTraySettings()
+	if len(settings.AlertRules) != len(defaults.AlertRules) {
+		return fmt.Errorf("한도별 알림 설정이 누락됐습니다")
+	}
+	for key, rule := range settings.AlertRules {
+		if _, ok := defaults.AlertRules[key]; !ok {
+			return fmt.Errorf("지원하지 않는 알림 한도: %s", key)
+		}
+		if rule.Threshold < 1 || rule.Threshold > 99 {
+			return fmt.Errorf("알림 기준은 1~99%%여야 합니다")
+		}
+	}
+	return nil
 }
 
 func settingsPath() string { return filepath.Join(dataDir(), "settings.json") }
@@ -34,29 +86,32 @@ func loadTraySettings() (traySettings, error) {
 	}
 	// 폐기된 도넛+숫자 설정은 기본 도넛으로 읽는다.
 	if settings.IconStyle == "donut-number" {
-		return defaultTraySettings(), nil
+		settings.IconStyle = iconStyleDonut
 	}
-	if !validIconStyle(settings.IconStyle) {
-		return defaultTraySettings(), fmt.Errorf("지원하지 않는 아이콘 모양: %q", settings.IconStyle)
+	if err := validateTraySettings(settings); err != nil {
+		return defaultTraySettings(), err
 	}
 	return settings, nil
 }
 
 func saveTraySettings(settings traySettings) error {
-	if !validIconStyle(settings.IconStyle) {
-		return fmt.Errorf("지원하지 않는 아이콘 모양: %q", settings.IconStyle)
+	if err := validateTraySettings(settings); err != nil {
+		return err
 	}
 	b, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
-	path := settingsPath()
+	return atomicWriteFile(settingsPath(), append(b, '\n'))
+}
+
+func atomicWriteFile(path string, data []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(path), ".settings-*.tmp")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(f.Name())
-	if _, err := f.Write(append(b, '\n')); err != nil {
+	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
 		return err
 	}
@@ -68,4 +123,11 @@ func saveTraySettings(settings traySettings) error {
 		return err
 	}
 	return os.Rename(f.Name(), path)
+}
+
+func trayVisibleState(s State, settings traySettings) State {
+	s.Claude.Available = s.Claude.Available && settings.VisibleAgents.Claude
+	s.Codex.Available = s.Codex.Available && settings.VisibleAgents.Codex
+	s.Antigravity.Available = s.Antigravity.Available && settings.VisibleAgents.Antigravity
+	return s
 }

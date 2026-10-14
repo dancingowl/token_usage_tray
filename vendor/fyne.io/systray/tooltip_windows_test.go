@@ -245,7 +245,7 @@ func assertNativeCardStyle(t *testing.T, tip *trackingTooltip, dpi uintptr) {
 	var margin tooltipRect
 	pSendMessage.Call(uintptr(tip.window), 0x0400+27, 0, uintptr(unsafe.Pointer(&margin))) // TTM_GETMARGIN
 	padding := int32(12 * dpi / 96)
-	if margin != (tooltipRect{padding, padding, padding, padding}) {
+	if margin != (tooltipRect{padding, padding, padding, padding + int32(44*dpi/96)}) {
 		t.Fatalf("native padding mismatch at DPI %d: %v", dpi, margin)
 	}
 	handle, _, _ := pSendMessage.Call(uintptr(tip.window), 0x0031, 0, 0) // WM_GETFONT
@@ -260,4 +260,127 @@ func assertNativeCardStyle(t *testing.T, tip *trackingTooltip, dpi uintptr) {
 	// Comctl32 v5 accepts TTM_SETTITLEW (checked by scaleCardStyle), but does
 	// not implement the later TTM_GETTITLE message. Visible heading layout
 	// must be checked with the running application rather than that API.
+}
+
+func TestTooltipPointerBounds(t *testing.T) {
+	rect := tooltipRect{-400, -200, 0, 0}
+	for _, p := range []point{{-400, -200}, {-1, -1}} {
+		if !tooltipContainsPoint(rect, p) {
+			t.Fatalf("inside point rejected: %v", p)
+		}
+	}
+	for _, p := range []point{{-401, -200}, {0, -1}, {-1, 0}} {
+		if tooltipContainsPoint(rect, p) {
+			t.Fatalf("outside point accepted: %v", p)
+		}
+	}
+}
+
+func TestNativeClickCardButtonsHidden(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	instance, _, err := pGetModuleHandle.Call(0)
+	if instance == 0 {
+		t.Fatal(err)
+	}
+	className, _ := windows.UTF16PtrFromString("STATIC")
+	owner, _, err := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(className)), 0, 0, 0, 0, 0, 0, 0, 0, instance, 0)
+	if owner == 0 {
+		t.Fatal(err)
+	}
+	defer pDestroyWindow.Call(owner)
+	tray := winTray{instance: windows.Handle(instance), window: windows.Handle(owner)}
+	tip, err := tray.newClickTooltip()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tray.clickTooltip = tip
+	defer tray.destroyClickTooltip()
+	pSetWindowPos.Call(uintptr(tip.window), 0, 0, 0, 340, 300, 0x0002|0x0004|0x0010)
+	tip.layoutActionButtons()
+	for len(ClickActionCh) > 0 {
+		<-ClickActionCh
+	}
+	for i, button := range tip.buttons {
+		if button == 0 {
+			t.Fatal("missing native action button")
+		}
+		var text [32]uint16
+		pSendMessage.Call(uintptr(button), 0x000d, uintptr(len(text)), uintptr(unsafe.Pointer(&text))) // WM_GETTEXT
+		if windows.UTF16ToString(text[:]) != clickCardActions[i].label {
+			t.Fatal("native button label mismatch")
+		}
+		if result, _, _ := pSendMessage.Call(uintptr(button), 0x0021, 0, 0); result != 3 {
+			t.Fatal("button must not activate the popup")
+		}
+		var rect tooltipRect
+		pGetWindowRect.Call(uintptr(button), uintptr(unsafe.Pointer(&rect)))
+		if rect.Right <= rect.Left || rect.Bottom <= rect.Top {
+			t.Fatal("button layout has no area")
+		}
+		pSendMessage.Call(uintptr(tip.window), 0x0111, uintptr(0x7100+i), uintptr(button))
+		select {
+		case action := <-ClickActionCh:
+			if action != clickCardActions[i].action {
+				t.Fatalf("wrong action %q", action)
+			}
+		default:
+			t.Fatal("native command did not dispatch")
+		}
+	}
+	for i := 0; i < cap(ClickActionCh); i++ {
+		ClickActionCh <- "copy"
+	}
+	// A full consumer queue must not block the OS thread.
+	pSendMessage.Call(uintptr(tip.window), 0x0111, 0x7100, uintptr(tip.buttons[0]))
+	for len(ClickActionCh) > 0 {
+		<-ClickActionCh
+	}
+	handles := append([]windows.Handle{tip.window}, tip.buttons[:]...)
+	tray.destroyClickTooltip()
+	for _, handle := range handles {
+		if _, exists := clickCardWindows.Load(handle); exists {
+			t.Fatal("destroyed HWND retained in subclass ownership map")
+		}
+	}
+}
+
+func TestHiddenTrayKeepsUpdatesWithoutShellRegistration(t *testing.T) {
+	tray := winTray{nid: &notifyIconData{}, hidden: true}
+	tray.initialized.Store(true)
+	if err := tray.setTooltip("hidden summary 한글"); err != nil {
+		t.Fatal(err)
+	}
+	if windows.UTF16ToString(tray.nid.Tip[:]) != "hidden summary 한글" {
+		t.Fatal("hidden tooltip update lost")
+	}
+	if err := tray.applyVisibility(); err != nil {
+		t.Fatal(err)
+	}
+	if tray.iconAdded {
+		t.Fatal("hidden tray registered with Shell")
+	}
+	// A queued restore has changed intent, but NIM_ADD has not run yet.
+	tray.hidden = false
+	if err := tray.setTooltip("queued restore"); err != nil {
+		t.Fatal("updates during queued restore must not NIM_MODIFY an absent icon:", err)
+	}
+	tray.loadedImages = map[string]windows.Handle{"cached": 123}
+	if err := tray.setIcon("cached"); err != nil {
+		t.Fatal("icon update during queued restore must remain cached:", err)
+	}
+	if tray.nid.Icon != 123 {
+		t.Fatal("cached icon update lost")
+	}
+	before := tray.nid.Tip
+	// Before readiness, visibility changes preserve intent without HWND calls.
+	tray.initialized.Store(false)
+	tray.setVisible(true)
+	if tray.hidden || tray.iconAdded || tray.nid.Tip != before {
+		t.Fatal("restore intent mutated registration or stored data")
+	}
+	tray.setVisible(false)
+	if !tray.hidden {
+		t.Fatal("hide intent not preserved")
+	}
 }

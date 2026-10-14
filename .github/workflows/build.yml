@@ -30,8 +30,11 @@ jobs:
         shell: bash
         env:
           CGO_ENABLED: '0' # 윈도우는 cgo 없이 빌드된다 = 컴파일러 불필요
+          APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'dev' }}
         run: |
-          go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/usage-tray.exe .
+          go test ./...
+          go test fyne.io/systray
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.appVersion=$APP_VERSION" -o dist/usage-tray.exe .
           ls -la dist
       - name: 스모크 테스트
         shell: bash
@@ -57,7 +60,10 @@ jobs:
           go-version: 'stable'
           cache: true
       - name: 빌드 (유니버설 .app)
+        env:
+          VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'dev' }}
         run: |
+          go test ./...
           chmod +x build.sh
           ./build.sh
           ls -la dist

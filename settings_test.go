@@ -12,7 +12,9 @@ func TestTraySettingsDefaultAndRoundTrip(t *testing.T) {
 		t.Fatalf("missing settings: %+v, %v", settings, err)
 	}
 	for _, style := range []iconStyle{iconStyleNumber, iconStyleDonut} {
-		if err := saveTraySettings(traySettings{IconStyle: style}); err != nil {
+		next := defaultTraySettings()
+		next.IconStyle = style
+		if err := saveTraySettings(next); err != nil {
 			t.Fatal(err)
 		}
 		loaded, err := loadTraySettings()
@@ -24,7 +26,9 @@ func TestTraySettingsDefaultAndRoundTrip(t *testing.T) {
 
 func TestTraySettingsRejectsInvalidWithoutOverwriting(t *testing.T) {
 	t.Setenv("USAGE_TRAY_DATA_DIR", t.TempDir())
-	if err := saveTraySettings(traySettings{IconStyle: iconStyleNumber}); err != nil {
+	next := defaultTraySettings()
+	next.IconStyle = iconStyleNumber
+	if err := saveTraySettings(next); err != nil {
 		t.Fatal(err)
 	}
 	if err := saveTraySettings(traySettings{IconStyle: "unsupported"}); err == nil {

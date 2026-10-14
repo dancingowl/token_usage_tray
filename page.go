@@ -344,9 +344,8 @@ func renderPage(s *State, tok *TokenStats) string {
 	b.WriteString(`<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta http-equiv="refresh" content="30">
 <link rel="icon" href="data:image/png;base64,` + base64.StdEncoding.EncodeToString(faviconPNG) + `">
-<title>사용량</title><style>` + pageCSS + `</style></head><body>`)
+<title>사용량</title><style>` + pageCSS + dashboardCSS + `</style></head><body>`)
 
 	// 최상단 — 쓰는 에이전트의 마크를 크게 세우고 그 옆에 제목·갱신 시각.
 	brand := ""
@@ -360,10 +359,10 @@ func renderPage(s *State, tok *TokenStats) string {
 		brand += agentIcon(markCodex, "xl")
 	}
 	fmt.Fprintf(&b, `<header><span class="brand">%s</span><h1>사용량</h1>`+
-		`<div class="meta"><span class="dot"></span>%s 갱신 · 30초마다</div></header>`,
+		`<div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 화면 자동 갱신</div></header>`,
 		brand, s.Updated.Local().Format("15:04:05"))
 
-	b.WriteString(`<div class="row cards">`)
+	b.WriteString(`<section id="usage-snapshot"><div class="row cards">`)
 	for _, c := range gaugeCards(s) {
 		b.WriteString(cardHTML(c))
 	}
@@ -380,8 +379,9 @@ func renderPage(s *State, tok *TokenStats) string {
 	if s.Antigravity.Available {
 		b.WriteString(`<p class="none">Antigravity는 모델별 잔여 한도와 리셋 시각을 표시합니다. 토큰 수와 과거 사용량은 제공되지 않습니다.</p>`)
 	}
+	b.WriteString(`</section>` + dashboardHTML + `<section id="token-snapshot">`)
 	if tok == nil {
-		b.WriteString(`<div class="panel none">토큰 집계가 아직 없다 — 첫 스캔이 끝나면 채워진다.</div></body></html>`)
+		b.WriteString(`<div class="panel none">토큰 집계가 아직 없습니다. 첫 스캔이 끝나면 채워집니다.</div></section>` + dashboardScriptTag() + `</body></html>`)
 		return b.String()
 	}
 
@@ -461,7 +461,7 @@ func renderPage(s *State, tok *TokenStats) string {
 		tok.Updated.Local().Format("2006-01-02 15:04:05"), tok.ScanMs,
 		orDash(s.Claude.Src), orDash(s.Codex.Src))
 
-	b.WriteString(`</body></html>`)
+	b.WriteString(`</section>` + dashboardScriptTag() + `</body></html>`)
 	return b.String()
 }
 
@@ -556,10 +556,10 @@ func cardHTML(c gaugeCard) string {
 		chips = `<div class="chips">` + cb.String() + `</div>`
 	}
 
-	return fmt.Sprintf(`<div class="card"><img src="%s" alt=""><div class="cbody">`+
+	return fmt.Sprintf(`<div class="card" data-agent="%s"><img src="%s" alt=""><div class="cbody">`+
 		`<div class="ct" style="color:rgb(%d,%d,%d)">%s%s</div><div class="cl%s">%s</div>`+
 		`<div class="cs">%s</div>%s</div></div>`,
-		ringIMG(c.Left, c.Brand), c.Brand.R, c.Brand.G, c.Brand.B,
+		strings.ToLower(c.Mark.name), ringIMG(c.Left, c.Brand), c.Brand.R, c.Brand.G, c.Brand.B,
 		agentIcon(c.Mark, "sm"), html.EscapeString(c.Title), cls, left, html.EscapeString(reset), chips)
 }
 

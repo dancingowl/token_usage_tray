@@ -7,7 +7,11 @@
 # macOS 바이너리는 여기서 만들 수 없다. macOS 의 메뉴바 API 는 cgo(Cocoa)를 거치므로
 # 맥에서 `./build.sh` 를 돌려야 한다. 자세한 것은 README 의 '맥에서 쓰기'.
 
-param([switch]$Run)
+param(
+    [switch]$Run,
+    [ValidatePattern('^(dev|v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$')]
+    [string]$Version = 'dev'
+)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -19,13 +23,13 @@ $env:CGO_ENABLED = '0'
 $env:GOOS = 'windows'
 $env:GOARCH = 'amd64'
 
-go build -trimpath -ldflags '-s -w -H windowsgui' -o (Join-Path $dist 'usage-tray.exe') .
+go build -trimpath -ldflags "-s -w -H windowsgui -X main.appVersion=$Version" -o (Join-Path $dist 'usage-tray.exe') .
 if ($LASTEXITCODE -ne 0) { throw 'build 실패' }
 
 $exe = Get-Item (Join-Path $dist 'usage-tray.exe')
 "빌드 완료: $($exe.FullName)  ($([math]::Round($exe.Length / 1MB, 1)) MB)"
 
 if ($Run) {
-    Start-Process $exe.FullName
+    Start-Process $exe.FullName -WindowStyle Hidden
     '실행했다 — 트레이를 확인한다'
 }

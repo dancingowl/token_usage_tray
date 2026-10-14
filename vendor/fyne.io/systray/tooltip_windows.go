@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -38,7 +39,7 @@ type clickTooltipBuffer [clickTipTextCapacity]uint16
 
 // SetClickTooltip sets the multiline summary displayed by a single left click
 // on Windows. It is independent of SetTooltip's hover text. An empty string
-// restores the hover text fallback. Text is snapshotted when the card opens.
+// restores the hover text fallback. Updates also refresh an already open card.
 func SetClickTooltip(text string) {
 	if err := wt.setClickTooltip(text); err != nil {
 		log.Printf("systray error: unable to set click tooltip: %s", err)
@@ -58,8 +59,12 @@ func (t *winTray) setClickTooltip(text string) error {
 		buffer[len(buffer)-2] = 0
 	}
 	t.muNID.Lock()
+	changed := t.clickText != buffer
 	t.clickText = buffer
 	t.muNID.Unlock()
+	if changed && t.isReady() {
+		pPostMessage.Call(uintptr(t.window), wmClickSummaryChanged, 0, 0)
+	}
 	return nil
 }
 
@@ -90,13 +95,17 @@ type tooltipToolInfo struct {
 }
 
 type trackingTooltip struct {
-	window  windows.Handle
-	tool    tooltipToolInfo
-	text    clickTooltipBuffer
-	pinner  runtime.Pinner
-	visible bool
-	font    windows.Handle
-	fontDPI uintptr
+	window    windows.Handle
+	tool      tooltipToolInfo
+	text      clickTooltipBuffer
+	pinner    runtime.Pinner
+	visible   bool
+	font      windows.Handle
+	fontDPI   uintptr
+	buttons   [4]windows.Handle
+	pressed   windows.Handle
+	dismissAt time.Time
+	anchor    point
 }
 
 // All state and Win32 operations below belong to wndProc's OS thread.
@@ -175,7 +184,27 @@ func (t *winTray) handleClickTimer(id uintptr) {
 	}
 	pKillTimer.Call(uintptr(t.window), id)
 	if hide {
+		if tip := t.clickTooltip; tip != nil && tip.visible {
+			var cursor point
+			var rect tooltipRect
+			cursorOK, _, _ := pGetCursorPos.Call(uintptr(unsafe.Pointer(&cursor)))
+			rectOK, _, _ := pGetWindowRect.Call(uintptr(tip.window), uintptr(unsafe.Pointer(&rect)))
+			if cursorOK != 0 && rectOK != 0 && tooltipContainsPoint(rect, cursor) {
+				tip.dismissAt = time.Now().Add(clickTipDuration * time.Millisecond)
+			}
+			if time.Now().Before(tip.dismissAt) {
+				if err := t.startClickDismissTimer(); err == nil {
+					return
+				}
+			}
+		}
 		t.hideClickTooltip()
+		return
+	}
+	t.muNID.RLock()
+	hidden := t.hidden
+	t.muNID.RUnlock()
+	if hidden {
 		return
 	}
 	if t.clickTooltip != nil && t.clickTooltip.visible {
@@ -233,6 +262,12 @@ func (t *winTray) newClickTooltip() (*trackingTooltip, error) {
 		// Styling is optional: keep the working click tooltip if GDI cannot
 		// allocate a font, while reporting the degraded appearance.
 		log.Printf("systray error: unable to style click tooltip: %s", err)
+	}
+	if err := tip.createActionButtons(t.instance); err != nil {
+		pDestroyWindow.Call(hwnd)
+		tip.releaseCardFont()
+		tip.pinner.Unpin()
+		return nil, err
 	}
 	return tip, nil
 }
@@ -304,6 +339,7 @@ func (t *winTray) showClickTooltip(cursor point) error {
 		}
 	}
 	tip := t.clickTooltip
+	tip.anchor = cursor
 	tip.text = text
 	tip.sendTool(ttmUpdateTipTextW, 0)
 	// Move while hidden first so a per-monitor-aware control gets the DPI of
@@ -332,15 +368,48 @@ func (t *winTray) showClickTooltip(cursor point) error {
 		t.hideClickTooltip()
 		return fmt.Errorf("measure tracking tooltip: %w", err)
 	}
-	position := clickTooltipPosition(cursor, rect.Right-rect.Left, rect.Bottom-rect.Top, gap, work)
+	width := rect.Right - rect.Left
+	minWidth := int32(340 * dpi / 96)
+	if width < minWidth {
+		width = minWidth
+	}
+	if width > work.Right-work.Left {
+		width = work.Right - work.Left
+	}
+	position := clickTooltipPosition(cursor, width, rect.Bottom-rect.Top, gap, work)
+	pSetWindowPos.Call(uintptr(tip.window), 0, 0, 0, uintptr(width), uintptr(rect.Bottom-rect.Top), 0x0002|0x0004|0x0010|0x0200)
 	tip.move(position)
-	id := t.clicks.nextTimerID()
-	if ok, _, err := pSetTimer.Call(uintptr(t.window), id, clickTipDuration, 0); ok == 0 {
+	tip.layoutActionButtons()
+	tip.dismissAt = time.Now().Add(clickTipDuration * time.Millisecond)
+	if err := t.startClickDismissTimer(); err != nil {
 		t.hideClickTooltip()
+		return err
+	}
+	return nil
+}
+
+func tooltipContainsPoint(rect tooltipRect, p point) bool {
+	return p.X >= rect.Left && p.X < rect.Right && p.Y >= rect.Top && p.Y < rect.Bottom
+}
+
+func (t *winTray) startClickDismissTimer() error {
+	id := t.clicks.nextTimerID()
+	if ok, _, err := pSetTimer.Call(uintptr(t.window), id, 250, 0); ok == 0 {
 		return fmt.Errorf("start tooltip dismiss timer: %w", err)
 	}
 	t.clicks.hideTimer = id
 	return nil
+}
+
+func (t *winTray) refreshVisibleClickTooltip() {
+	if tip := t.clickTooltip; tip != nil && tip.visible {
+		deadline := tip.dismissAt
+		t.hideClickTooltip()
+		if err := t.showClickTooltip(tip.anchor); err != nil {
+			log.Printf("systray error: unable to refresh click tooltip: %s", err)
+		}
+		tip.dismissAt = deadline
+	}
 }
 
 func (t *winTray) hideClickTooltip() {

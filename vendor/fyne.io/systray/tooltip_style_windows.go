@@ -70,12 +70,17 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 	// The control does not own the supplied HFONT. Replace before deleting the
 	// previous font, and release the last font only after destroying the HWND.
 	pSendMessage.Call(uintptr(tip.window), 0x0030, handle, 0) // WM_SETFONT; still hidden.
+	for _, button := range tip.buttons {
+		if button != 0 {
+			pSendMessage.Call(uintptr(button), 0x0030, handle, 1)
+		}
+	}
 	tip.font, tip.fontDPI = windows.Handle(handle), dpi
 	if oldFont != 0 {
 		pDeleteObject.Call(uintptr(oldFont))
 	}
 	padding := int32(12 * dpi / 96)
-	margin := tooltipRect{padding, padding, padding, padding}
+	margin := tooltipRect{padding, padding, padding, padding + int32(44*dpi/96)}
 	pSendMessage.Call(uintptr(tip.window), ttmSetMargin, 0, uintptr(unsafe.Pointer(&margin)))
 	title, _ := windows.UTF16PtrFromString(clickTipTitle)
 	// Native title rendering supplies the bold heading above the body; the
