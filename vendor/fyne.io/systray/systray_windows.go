@@ -232,11 +232,17 @@ type winTray struct {
 	nid   *notifyIconData
 	muNID sync.RWMutex
 	wcex  *wndClassEx
+	// Click text is separate from the Shell hover tooltip, under muNID.
+	clickText clickTooltipBuffer
 
 	wmSystrayMessage,
 	wmTaskbarCreated uint32
 
 	initialized atomic.Bool
+
+	// Owned exclusively by the tray window's thread (wndProc).
+	clickTooltip *trackingTooltip
+	clicks       trayClickState
 }
 
 // isReady checks if the tray as already been initialized. It is not goroutine safe with in regard to the initialization function, but prevents a panic when functions are called too early.
@@ -282,7 +288,8 @@ func (t *winTray) setTooltip(src string) error {
 
 	t.muNID.Lock()
 	defer t.muNID.Unlock()
-	copy(t.nid.Tip[:], b[:])
+	t.nid.Tip = [128]uint16{}
+	copy(t.nid.Tip[:len(t.nid.Tip)-1], b)
 	t.nid.Flags |= NIF_TIP
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
 
@@ -302,6 +309,7 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		WM_ENDSESSION    = 0x0016
 		WM_CLOSE         = 0x0010
 		WM_DESTROY       = 0x0002
+		WM_TIMER         = 0x0113
 	)
 	switch message {
 	case WM_COMMAND:
@@ -311,6 +319,7 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 			systrayMenuItemSelected(uint32(wParam))
 		}
 	case WM_CLOSE:
+		t.destroyClickTooltip()
 		pDestroyWindow.Call(uintptr(t.window))
 		t.wcex.unregister()
 	case WM_DESTROY:
@@ -318,23 +327,32 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		defer pPostQuitMessage.Call(uintptr(int32(0)))
 		fallthrough
 	case WM_ENDSESSION:
+		t.destroyClickTooltip()
 		t.muNID.Lock()
 		if t.nid != nil {
 			t.nid.delete()
 		}
 		t.muNID.Unlock()
 		runSystrayExit()
+	case WM_TIMER:
+		t.handleClickTimer(wParam)
 	case t.wmSystrayMessage:
 		switch lParam {
+		case WM_LBUTTONUP:
+			t.deferSingleClick()
 		case WM_LBUTTONDBLCLK:
+			t.cancelSingleClick()
+			t.clicks.ignoreNextUp = true
+			t.hideClickTooltip()
 			notifyDClicked()
 		case WM_RBUTTONUP:
+			t.cancelSingleClick()
+			t.hideClickTooltip()
 			t.showMenu()
-			// WM_LBUTTONUP is intentionally not handled here: a single left
-			// click is reserved for WM_LBUTTONDBLCLK above. Showing the menu
-			// on the single click would swallow the second click.
 		}
 	case t.wmTaskbarCreated: // on explorer.exe restarts
+		t.cancelSingleClick()
+		t.hideClickTooltip()
 		t.muNID.Lock()
 		t.nid.add()
 		t.muNID.Unlock()

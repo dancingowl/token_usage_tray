@@ -69,12 +69,14 @@ type State struct {
 	Alerts map[string]bool `json:"alerts"`
 }
 
+type enabledAgents struct{ claude, codex, antigravity bool }
+
 var (
 	only    *string
 	mu      sync.RWMutex
 	state   = &State{Alerts: map[string]bool{}}
 	tokens  *TokenStats
-	agents  struct{ claude, codex, antigravity bool }
+	agents  enabledAgents
 	logFile = filepath.Join(dataDir(), "usage-tray.log")
 )
 
@@ -196,13 +198,6 @@ func main() {
 		return
 	}
 	go serve(ln)
-	go func(claude, codex bool) {
-		t := scanTokens(claude, codex)
-		mu.Lock()
-		defer mu.Unlock()
-		tokens = t
-	}(agents.claude, agents.codex)
-
 	systray.Run(onReady, func() { logf("exit") })
 }
 
@@ -250,12 +245,16 @@ func keepLastGood(cur, prev AgentUsage, prevAt time.Time) AgentUsage {
 var lastFetch struct{ claude, codex, antigravity time.Time }
 
 func refresh() {
+	refreshFor(agents)
+}
+
+func refreshFor(enabled enabledAgents) {
 	mu.RLock()
 	prevState := *state
 	mu.RUnlock()
 
 	c, x, a := cachedUsage(prevState.Claude), cachedUsage(prevState.Codex), cachedUsage(prevState.Antigravity)
-	if agents.claude {
+	if enabled.claude {
 		// 최소 간격을 지킨다. 그 사이에는 직전값을 그대로 쓴다(아래 keepLastGood).
 		if time.Since(lastFetch.claude) >= claudePollMin {
 			lastFetch.claude = time.Now()
@@ -263,14 +262,14 @@ func refresh() {
 		}
 		c = keepLastGood(c, prevState.Claude, prevState.Updated)
 	}
-	if agents.codex {
+	if enabled.codex {
 		if time.Since(lastFetch.codex) >= codexPollMin {
 			lastFetch.codex = time.Now()
 			x = fetchCodex()
 		}
 		x = keepLastGood(x, prevState.Codex, prevState.Updated)
 	}
-	if agents.antigravity {
+	if enabled.antigravity {
 		if time.Since(lastFetch.antigravity) >= 2*time.Minute {
 			lastFetch.antigravity = time.Now()
 			a = fetchAntigravity()
@@ -283,9 +282,9 @@ func refresh() {
 		prev = map[string]bool{}
 	}
 	state = &State{Updated: time.Now(), Claude: c, Codex: x, Antigravity: a, Alerts: prev}
-	state.Agents.Antigravity = agents.antigravity
-	state.Agents.Claude = agents.claude
-	state.Agents.Codex = agents.codex
+	state.Agents.Antigravity = enabled.antigravity
+	state.Agents.Claude = enabled.claude
+	state.Agents.Codex = enabled.codex
 	state.Summary = summarize(state)
 	snapshot := *state
 	mu.Unlock()
@@ -487,6 +486,11 @@ func checkAlerts(s *State) {
 // ---------------------------------------------------------------- 트레이
 
 func onReady() {
+	settings, err := loadTraySettings()
+	if err != nil {
+		logf("settings: %v", err)
+	}
+	settingsError := err != nil
 	// 맡은 에이전트의 창을 줄마다 하나씩. 클릭 대상이 아니므로 비활성으로 둔다.
 	infoItems := []*systray.MenuItem{}
 	for i := 0; i < 14; i++ {
@@ -499,6 +503,9 @@ func onReady() {
 	mDetail := systray.AddMenuItem("상세 보기", "브라우저로 상세 화면을 연다")
 	mRefresh := systray.AddMenuItem("지금 갱신", "")
 	mCopy := systray.AddMenuItem("요약 복사", "")
+	mStyle := systray.AddMenuItem("아이콘 모양", "트레이 아이콘 표시 방법을 선택한다")
+	mDonut := mStyle.AddSubMenuItemCheckbox("도넛", "남은 사용량을 도넛으로 표시한다", settings.IconStyle == iconStyleDonut)
+	mNumber := mStyle.AddSubMenuItemCheckbox("숫자만", "남은 사용량의 퍼센트 숫자를 표시한다", settings.IconStyle == iconStyleNumber)
 	mFolder := systray.AddMenuItem("폴더 열기", "")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("끝내기", "")
@@ -510,9 +517,20 @@ func onReady() {
 		s := *state
 		mu.RUnlock()
 		left, brand := iconChoice(&s)
-		systray.SetIcon(trayIcon(left, brand))
+		systray.SetIcon(trayIconStyle(left, brand, settings.IconStyle))
 		systray.SetTitle("")
 		systray.SetTooltip(tooltip(&s))
+		systray.SetClickTooltip(clickSummary(&s))
+		for _, option := range []struct {
+			item  *systray.MenuItem
+			style iconStyle
+		}{{mDonut, iconStyleDonut}, {mNumber, iconStyleNumber}} {
+			if option.style == settings.IconStyle {
+				option.item.Check()
+			} else {
+				option.item.Uncheck()
+			}
+		}
 		lines := ownLines(&s)
 		for i, it := range infoItems {
 			if i < len(lines) {
@@ -523,15 +541,76 @@ func onReady() {
 			}
 		}
 	}
+	chooseStyle := func(style iconStyle) {
+		next := traySettings{IconStyle: style}
+		if err := saveTraySettings(next); err != nil {
+			logf("save settings: %v", err)
+			notify("아이콘 설정 저장 실패", "설정을 저장하지 못했다. 데이터 폴더의 로그를 확인한다.")
+			return
+		}
+		settings = next
+		settingsError = false
+		paint()
+	}
 	paint()
 
 	go func() {
 		tick := time.NewTicker(tickInterval)
 		tokenTick := time.NewTicker(tokenEvery)
+		settingsTick := time.NewTicker(time.Second)
 		defer tick.Stop()
 		defer tokenTick.Stop()
+		defer settingsTick.Stop()
+		// 수집 중에도 설정 메뉴와 다른 프로세스의 설정을 바로 처리한다.
+		// 각 수집은 하나만 실행하고, 에이전트 선택은 시작할 때 복사한다.
+		refreshed := make(chan struct{}, 1)
+		scanned := make(chan *TokenStats, 1)
+		refreshing, scanning := false, false
+		startRefresh := func() {
+			if refreshing {
+				return
+			}
+			refreshing = true
+			enabled := agents
+			go func() {
+				refreshFor(enabled)
+				refreshed <- struct{}{}
+			}()
+		}
+		startScan := func() {
+			if scanning {
+				return
+			}
+			scanning = true
+			enabled := agents
+			go func() { scanned <- scanTokens(enabled.claude, enabled.codex) }()
+		}
+		startScan()
 		for {
 			select {
+			case <-refreshed:
+				refreshing = false
+				paint()
+			case t := <-scanned:
+				scanning = false
+				mu.Lock()
+				tokens = t
+				mu.Unlock()
+			case <-settingsTick.C:
+				// Windows의 에이전트별 프로세스에도 같은 표시 설정을 반영한다.
+				next, err := loadTraySettings()
+				if err != nil {
+					if !settingsError {
+						logf("settings: %v", err)
+					}
+					settingsError = true
+					continue
+				}
+				settingsError = false
+				if next != settings {
+					settings = next
+					paint()
+				}
 			case <-tick.C:
 				// 새로 로그인한 에이전트가 있으면 반영한다(끄는 것은 재시작 때만).
 				// -only 로 일부러 끈 쪽은 되살리지 않는다.
@@ -543,27 +622,23 @@ func onReady() {
 				if tag() == "" {
 					agents.antigravity = agents.antigravity || detectAntigravity()
 				}
-				refresh()
-				paint()
+				startRefresh()
 			case <-tokenTick.C:
-				t := scanTokens(agents.claude, agents.codex)
-				mu.Lock()
-				tokens = t
-				mu.Unlock()
+				startScan()
 			case <-mDetail.ClickedCh:
 				openURL("http://" + listenAddr() + "/")
 			case <-systray.DClickedCh:
 				openURL("http://" + listenAddr() + "/")
+			case <-mDonut.ClickedCh:
+				chooseStyle(iconStyleDonut)
+			case <-mNumber.ClickedCh:
+				chooseStyle(iconStyleNumber)
 			case <-mRefresh.ClickedCh:
 				if tag() == "" {
 					agents.antigravity = agents.antigravity || detectAntigravity()
 				}
-				refresh()
-				paint()
-				t := scanTokens(agents.claude, agents.codex)
-				mu.Lock()
-				tokens = t
-				mu.Unlock()
+				startRefresh()
+				startScan()
 			case <-mCopy.ClickedCh:
 				mu.RLock()
 				sum := state.Summary
@@ -803,6 +878,16 @@ func dumpIcons(dir string) {
 			}
 			_ = os.WriteFile(fmt.Sprintf("%s/%s-%d.ico", dir, c.name, left),
 				pngToICO(ringPNG(left, c.brand, 32), 32), 0o644)
+		}
+	}
+	for _, style := range []iconStyle{iconStyleDonut, iconStyleNumber} {
+		for _, left := range []int{-1, 0, 8, 26, 55, 90, 100} {
+			for _, size := range []int{16, 22, 32, 44} {
+				name := fmt.Sprintf("%s/codex-%s-%d-%dpx.png", dir, style, left, size)
+				_ = os.WriteFile(name, trayStylePNG(left, colCodex, size, style), 0o644)
+			}
+			_ = os.WriteFile(fmt.Sprintf("%s/codex-%s-%d.ico", dir, style, left),
+				pngToICO(trayStylePNG(left, colCodex, 32, style), 32), 0o644)
 		}
 	}
 	fmt.Println("아이콘 견본을 썼다:", dir)
