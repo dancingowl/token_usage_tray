@@ -2,7 +2,7 @@
 
 package main
 
-// Windows 전용 잡일 — 콘솔 창 숨기기, 알림, 클립보드, 열기.
+// Windows 전용 잡일 — 콘솔 창 숨기기, 알림, 열기.
 
 import (
 	"fmt"
@@ -41,21 +41,6 @@ $n.Dispose()`
 	// PowerShell 5.1 은 BOM 없는 UTF-8 을 CP949 로 읽는다 — 한글이 깨지므로 BOM 을 붙인다.
 	_ = os.WriteFile(f, append([]byte{0xEF, 0xBB, 0xBF}, []byte(ps)...), 0o644)
 	_ = runHidden("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", f, title, msg)
-}
-
-func copyToClipboard(s string) {
-	cmd := exec.Command("cmd", "/c", "clip")
-	hideWindow(cmd)
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return
-	}
-	if cmd.Start() != nil {
-		return
-	}
-	_, _ = in.Write([]byte(s))
-	_ = in.Close()
-	_ = cmd.Wait()
 }
 
 func openURL(u string) { _ = runHidden("rundll32", "url.dll,FileProtocolHandler", u) }

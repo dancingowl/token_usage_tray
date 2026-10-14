@@ -124,4 +124,9 @@ func TestActionAPIQueuesAndRejectsUnknownActions(t *testing.T) {
 	if w.Code != 400 {
 		t.Fatal(w.Code)
 	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, apiRequest("POST", "/api/actions", `{"action":"copy"}`))
+	if w.Code != 400 {
+		t.Fatal("removed copy action still accepted", w.Code)
+	}
 }

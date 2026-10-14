@@ -102,7 +102,8 @@ type trackingTooltip struct {
 	visible   bool
 	font      windows.Handle
 	fontDPI   uintptr
-	buttons   [4]windows.Handle
+	buttons   [len(clickCardActions)]windows.Handle
+	hovered   windows.Handle
 	pressed   windows.Handle
 	dismissAt time.Time
 	anchor    point
@@ -417,9 +418,12 @@ func (t *winTray) hideClickTooltip() {
 		t.clicks.hideTimer = 0
 		pKillTimer.Call(uintptr(t.window), id)
 	}
-	if tip := t.clickTooltip; tip != nil && tip.visible {
-		tip.sendTool(ttmTrackActivate, 0)
-		tip.visible = false
+	if tip := t.clickTooltip; tip != nil {
+		tip.cancelButtonInteraction()
+		if tip.visible {
+			tip.sendTool(ttmTrackActivate, 0)
+			tip.visible = false
+		}
 	}
 }
 

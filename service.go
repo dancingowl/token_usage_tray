@@ -147,7 +147,7 @@ func appHTTPHandler() http.Handler {
 			return
 		}
 		switch body.Action {
-		case "refresh", "copy", "detail", "settings":
+		case "refresh", "detail", "settings":
 		default:
 			apiError(w, 400, "지원하지 않는 동작입니다")
 			return

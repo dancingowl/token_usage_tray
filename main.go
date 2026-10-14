@@ -472,7 +472,6 @@ func onReady() {
 	mSettings := systray.AddMenuItem("설정", "표시·알림·자동 실행 설정을 연다")
 	mUpdate := systray.AddMenuItem("업데이트 확인", "새 버전과 배포 정보를 확인한다")
 	mRefresh := systray.AddMenuItem("지금 갱신", "")
-	mCopy := systray.AddMenuItem("요약 복사", "")
 	mStyle := systray.AddMenuItem("아이콘 모양", "트레이 아이콘 표시 방법을 선택한다")
 	mDonut := mStyle.AddSubMenuItemCheckbox("도넛", "남은 사용량을 도넛으로 표시한다", settings.IconStyle == iconStyleDonut)
 	mNumber := mStyle.AddSubMenuItemCheckbox("숫자만", "남은 사용량의 퍼센트 숫자를 표시한다", settings.IconStyle == iconStyleNumber)
@@ -625,9 +624,6 @@ func onReady() {
 				case "refresh":
 					startRefresh()
 					startScan()
-				case "copy":
-					s := mergedState()
-					copyToClipboard(s.Summary)
 				case "detail":
 					openURL("http://" + listenAddr() + "/")
 				case "settings":
@@ -638,9 +634,6 @@ func onReady() {
 				case "refresh":
 					startRefresh()
 					startScan()
-				case "copy":
-					s := mergedState()
-					copyToClipboard(s.Summary)
 				case "detail":
 					openURL("http://" + listenAddr() + "/")
 				case "settings":
@@ -678,11 +671,6 @@ func onReady() {
 				}
 				startRefresh()
 				startScan()
-			case <-mCopy.ClickedCh:
-				mu.RLock()
-				sum := state.Summary
-				mu.RUnlock()
-				copyToClipboard(sum)
 			case <-mFolder.ClickedCh:
 				openPath(dataDir())
 			case <-mQuit.ClickedCh:

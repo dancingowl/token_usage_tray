@@ -7,9 +7,15 @@ const dashboardCSS = `
 .dashboard{margin-bottom:14px}.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;margin-bottom:14px}
 .dash-panel{margin-bottom:14px}.dash-panel h2{font-size:15px;color:var(--tx);margin-bottom:12px}
 .dash-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-button,select,input[type=number]{font:inherit;color:var(--tx);background:var(--panel2);border:1px solid #535969;border-radius:7px;padding:7px 10px}
-button{cursor:pointer}button:hover{background:#343948}button:disabled{opacity:.5;cursor:default}button.primary{background:#37568b;border-color:#6284bd}
+select,input[type=number]{font:inherit;color:var(--tx);background:var(--panel2);border:1px solid #535969;border-radius:7px;padding:7px 10px}
+button,.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:8px 14px;box-sizing:border-box;font:inherit;font-weight:600;line-height:1.2;color:#edf2f7;background:#2a3039;border:1px solid #475263;border-radius:8px;text-decoration:none;cursor:pointer;transition:background-color .14s,border-color .14s,box-shadow .14s}
+button:hover:not(:disabled),.button:hover{background:#35404d;border-color:#6a7b91;box-shadow:0 1px 3px #0003}button:active:not(:disabled),.button:active{background:#222a33;border-color:#8295ad;box-shadow:none}
+button:disabled{color:#9ba7b6;background:#252a32;border-color:#3b4552;opacity:.65;cursor:default;box-shadow:none}
+button.primary{background:#0f766e;border-color:#258b83;color:#fff}button.primary:hover:not(:disabled){background:#115e59;border-color:#35a298}button.primary:active:not(:disabled){background:#134e4a}button.primary:disabled{background:#29433f;border-color:#3c5752;color:#b1bfba}
+.button.subtle{background:transparent;border-color:transparent;color:#cbd5e1}.button.subtle:hover{background:#2a3039;border-color:#475263;color:#fff}
+.button-icon{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){button,.button{transition:none}}
 .dash-note{font-size:12px;color:var(--sub);margin:8px 0}.dash-message{min-height:22px;color:#a5d7ff;font-size:13px;margin:8px 0 0}.dash-message.error{color:var(--bad)}
 .dash-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}.dash-check{display:inline-flex;gap:7px;align-items:center;margin:4px 14px 4px 0}.dash-check input{accent-color:#7ba7ed;width:16px;height:16px}
 .dash-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 20px}
@@ -25,7 +31,7 @@ body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot
 const dashboardHTML = `
 <div class="dashboard">
  <section class="panel dash-panel" aria-labelledby="quick-title"><h2 id="quick-title">빠른 작업</h2>
-  <div class="dash-actions"><button type="button" data-action="refresh">지금 새로고침</button><button type="button" data-action="copy">요약 복사</button><button type="button" data-action="detail" id="detail-action">상세 보기</button></div>
+  <div class="dash-actions"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button><button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/#settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>
   <p id="action-message" class="dash-message" role="status" aria-live="polite"></p>
  </section>
  <div class="dash-grid">
@@ -146,7 +152,7 @@ async function loadStatus() {
 }
 document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',async()=>{
  const action=button.dataset.action;button.disabled=true;mutationCount++;
- try { await api('/api/actions','POST',{action});message('action-message',action==='refresh'?'새로고침을 요청했습니다. 수집이 끝나면 화면에 반영됩니다.':action==='copy'?'요약을 클립보드에 복사했습니다.':'상세 보기를 열었습니다.');if(action==='refresh')await loadStatus(); }
+ try { await api('/api/actions','POST',{action});message('action-message',action==='refresh'?'새로고침을 요청했습니다. 수집이 끝나면 화면에 반영됩니다.':'상세 보기를 열었습니다.');if(action==='refresh')await loadStatus(); }
  catch(e) { message('action-message',e.message,true); }
  finally { button.disabled=false;mutationCount--; }
 }));

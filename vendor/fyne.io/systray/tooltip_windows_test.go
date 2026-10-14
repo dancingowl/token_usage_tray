@@ -245,7 +245,7 @@ func assertNativeCardStyle(t *testing.T, tip *trackingTooltip, dpi uintptr) {
 	var margin tooltipRect
 	pSendMessage.Call(uintptr(tip.window), 0x0400+27, 0, uintptr(unsafe.Pointer(&margin))) // TTM_GETMARGIN
 	padding := int32(12 * dpi / 96)
-	if margin != (tooltipRect{padding, padding, padding, padding + int32(44*dpi/96)}) {
+	if margin != (tooltipRect{padding, padding, padding, padding + int32(48*dpi/96)}) {
 		t.Fatalf("native padding mismatch at DPI %d: %v", dpi, margin)
 	}
 	handle, _, _ := pSendMessage.Call(uintptr(tip.window), 0x0031, 0, 0) // WM_GETFONT
@@ -305,6 +305,10 @@ func TestNativeClickCardButtonsHidden(t *testing.T) {
 		if button == 0 {
 			t.Fatal("missing native action button")
 		}
+		style, _, _ := u32.NewProc("GetWindowLongW").Call(uintptr(button), ^uintptr(15)) // GWL_STYLE = -16
+		if style&0xf != 0xb {
+			t.Fatal("native action must use owner draw instead of the classic bevel")
+		}
 		var text [32]uint16
 		pSendMessage.Call(uintptr(button), 0x000d, uintptr(len(text)), uintptr(unsafe.Pointer(&text))) // WM_GETTEXT
 		if windows.UTF16ToString(text[:]) != clickCardActions[i].label {
@@ -318,6 +322,33 @@ func TestNativeClickCardButtonsHidden(t *testing.T) {
 		if rect.Right <= rect.Left || rect.Bottom <= rect.Top {
 			t.Fatal("button layout has no area")
 		}
+		pSendMessage.Call(uintptr(button), 0x0200, 0, packTooltipPosition(point{10, 10})) // WM_MOUSEMOVE
+		if tip.hovered != button {
+			t.Fatal("mouse move did not highlight native button")
+		}
+		pSendMessage.Call(uintptr(button), 0x02a3, 0, 0) // WM_MOUSELEAVE
+		if tip.hovered != 0 {
+			t.Fatal("mouse leave retained hover state")
+		}
+		u32.NewProc("EnableWindow").Call(uintptr(button), 0)
+		pSendMessage.Call(uintptr(tip.window), 0x0111, uintptr(0x7100+i), uintptr(button))
+		select {
+		case <-ClickActionCh:
+			t.Fatal("disabled native action dispatched")
+		default:
+		}
+		u32.NewProc("EnableWindow").Call(uintptr(button), 1)
+		pSendMessage.Call(uintptr(button), 0x0201, 1, packTooltipPosition(point{10, 10})) // WM_LBUTTONDOWN
+		pSendMessage.Call(uintptr(button), 0x0200, 1, packTooltipPosition(point{-1, -1}))
+		pSendMessage.Call(uintptr(button), 0x0202, 0, packTooltipPosition(point{-1, -1})) // release outside
+		pSendMessage.Call(uintptr(button), 0x0201, 1, packTooltipPosition(point{10, 10}))
+		pSendMessage.Call(uintptr(button), 0x001f, 0, 0) // WM_CANCELMODE
+		pSendMessage.Call(uintptr(button), 0x0202, 0, packTooltipPosition(point{10, 10}))
+		select {
+		case <-ClickActionCh:
+			t.Fatal("drag outside or cancelled press dispatched")
+		default:
+		}
 		pSendMessage.Call(uintptr(tip.window), 0x0111, uintptr(0x7100+i), uintptr(button))
 		select {
 		case action := <-ClickActionCh:
@@ -329,7 +360,7 @@ func TestNativeClickCardButtonsHidden(t *testing.T) {
 		}
 	}
 	for i := 0; i < cap(ClickActionCh); i++ {
-		ClickActionCh <- "copy"
+		ClickActionCh <- "refresh"
 	}
 	// A full consumer queue must not block the OS thread.
 	pSendMessage.Call(uintptr(tip.window), 0x0111, 0x7100, uintptr(tip.buttons[0]))

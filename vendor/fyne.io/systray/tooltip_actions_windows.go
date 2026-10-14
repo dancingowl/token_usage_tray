@@ -20,6 +20,10 @@ var (
 	pGetClientRect        = u32.NewProc("GetClientRect")
 	pSetCapture           = u32.NewProc("SetCapture")
 	pReleaseCapture       = u32.NewProc("ReleaseCapture")
+	pGetCapture           = u32.NewProc("GetCapture")
+	pTrackMouseEvent      = u32.NewProc("TrackMouseEvent")
+	pInvalidateRect       = u32.NewProc("InvalidateRect")
+	pIsWindowEnabled      = u32.NewProc("IsWindowEnabled")
 	clickCardWindows      sync.Map // HWND -> *trackingTooltip, no retained Go pointer in Win32.
 	clickCardSubclass     uintptr
 )
@@ -27,7 +31,7 @@ var (
 func init() { clickCardSubclass = windows.NewCallback(clickCardSubclassProc) }
 
 var clickCardActions = [...]struct{ label, action string }{
-	{"갱신", "refresh"}, {"복사", "copy"}, {"상세", "detail"}, {"설정", "settings"},
+	{"갱신", "refresh"}, {"상세", "detail"}, {"설정", "settings"},
 }
 
 // SetWindowSubclass must be called on the owning window thread. Win32 retains
@@ -49,9 +53,10 @@ func (tip *trackingTooltip) createActionButtons(instance windows.Handle) error {
 	class, _ := windows.UTF16PtrFromString("BUTTON")
 	for i, action := range clickCardActions {
 		label, _ := windows.UTF16PtrFromString(action.label)
-		// WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON. No tab stop or focus activation.
+		// WS_CHILD | WS_VISIBLE | BS_OWNERDRAW. Keep native button semantics,
+		// with the card's own flat rounded appearance and no focus activation.
 		hwnd, _, err := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(label)),
-			0x40000000|0x10000000, 0, 0, 1, 1, uintptr(tip.window), uintptr(0x7100+i), uintptr(instance), 0)
+			0x40000000|0x10000000|0x0000000b, 0, 0, 1, 1, uintptr(tip.window), uintptr(0x7100+i), uintptr(instance), 0)
 		runtime.KeepAlive(label)
 		if hwnd == 0 {
 			return fmt.Errorf("create %s click action: %w", action.action, err)
@@ -75,14 +80,10 @@ func (tip *trackingTooltip) layoutActionButtons() {
 	if dpi == 0 {
 		dpi = 96
 	}
-	padding, gap, height := int32(12*dpi/96), int32(6*dpi/96), int32(30*dpi/96)
-	width := (rect.Right - 2*padding - 3*gap) / 4
-	if width < 1 {
-		width = 1
-	}
 	for i, button := range tip.buttons {
-		pSetWindowPos.Call(uintptr(button), 0, uintptr(padding+int32(i)*(width+gap)), uintptr(rect.Bottom-padding-height),
-			uintptr(width), uintptr(height), 0x0004|0x0010|0x0200)
+		bounds := clickButtonBounds(rect, dpi, i, len(tip.buttons))
+		pSetWindowPos.Call(uintptr(button), 0, uintptr(bounds.Left), uintptr(bounds.Top),
+			uintptr(bounds.Right-bounds.Left), uintptr(bounds.Bottom-bounds.Top), 0x0004|0x0010|0x0200)
 	}
 }
 
@@ -112,19 +113,51 @@ func clickCardSubclassProc(hwnd uintptr, message uint32, wParam, lParam, subclas
 		if hwnd == uintptr(tip.window) {
 			tip.layoutActionButtons()
 		}
+	case 0x002b: // WM_DRAWITEM: BS_OWNERDRAW sends painting to the parent.
+		if hwnd == uintptr(tip.window) && lParam != 0 {
+			if item, ok := readClickButtonDrawItem(lParam); ok && tip.drawActionButton(&item) {
+				return 1
+			}
+		}
 	case 0x0111: // WM_COMMAND, e.g. accessibility-triggered BM_CLICK.
 		id := int(wParam&0xffff) - 0x7100
-		if id >= 0 && id < len(clickCardActions) && uintptr(tip.buttons[id]) == lParam && wParam>>16 == 0 {
+		if id >= 0 && id < len(clickCardActions) && uintptr(tip.buttons[id]) == lParam && wParam>>16 == 0 && clickButtonEnabled(lParam) {
 			notifyClickAction(clickCardActions[id].action)
 			tip.dismissAt = time.Now().Add(clickTipDuration * time.Millisecond)
 			return 0
 		}
 	case 0x0201: // WM_LBUTTONDOWN: button default handling calls SetFocus.
-		if buttonIndex >= 0 {
+		if buttonIndex >= 0 && clickButtonEnabled(hwnd) {
 			tip.pressed = windows.Handle(hwnd)
 			pSetCapture.Call(hwnd)
 			pSendMessage.Call(hwnd, 0x00f3, 1, 0) // BM_SETSTATE
 			return 0
+		}
+	case 0x0200: // WM_MOUSEMOVE, also while dragging outside under capture.
+		if buttonIndex >= 0 {
+			var rect tooltipRect
+			pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+			p := point{int32(int16(lParam & 0xffff)), int32(int16((lParam >> 16) & 0xffff))}
+			inside := tooltipContainsPoint(rect, p)
+			hovered := windows.Handle(0)
+			if inside && clickButtonEnabled(hwnd) {
+				hovered = windows.Handle(hwnd)
+				tracking := clickMouseTracking{Window: windows.Handle(hwnd), Flags: 0x00000002} // TME_LEAVE
+				tracking.Size = uint32(unsafe.Sizeof(tracking))
+				pTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tracking)))
+			}
+			tip.setHoveredButton(hovered)
+			if tip.pressed == windows.Handle(hwnd) {
+				selected := uintptr(0)
+				if inside {
+					selected = 1
+				}
+				pSendMessage.Call(hwnd, 0x00f3, selected, 0)
+			}
+		}
+	case 0x02a3: // WM_MOUSELEAVE
+		if tip.hovered == windows.Handle(hwnd) {
+			tip.setHoveredButton(0)
 		}
 	case 0x0202: // WM_LBUTTONUP: dispatch only on release inside the pressed button.
 		if buttonIndex >= 0 {
@@ -135,13 +168,13 @@ func clickCardSubclassProc(hwnd uintptr, message uint32, wParam, lParam, subclas
 			var rect tooltipRect
 			pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 			p := point{int32(int16(lParam & 0xffff)), int32(int16((lParam >> 16) & 0xffff))}
-			if pressed && tooltipContainsPoint(rect, p) {
+			if pressed && tooltipContainsPoint(rect, p) && clickButtonEnabled(hwnd) {
 				notifyClickAction(clickCardActions[buttonIndex].action)
 				tip.dismissAt = time.Now().Add(clickTipDuration * time.Millisecond)
 			}
 			return 0
 		}
-	case 0x0215: // WM_CAPTURECHANGED: cancelled press must never trigger an action.
+	case 0x001f, 0x0215: // WM_CANCELMODE / WM_CAPTURECHANGED cancel the press.
 		if buttonIndex >= 0 {
 			tip.pressed = 0
 			pSendMessage.Call(hwnd, 0x00f3, 0, 0)
@@ -149,4 +182,37 @@ func clickCardSubclassProc(hwnd uintptr, message uint32, wParam, lParam, subclas
 	}
 	result, _, _ := pDefSubclassProc.Call(hwnd, uintptr(message), wParam, lParam)
 	return result
+}
+
+func clickButtonEnabled(hwnd uintptr) bool {
+	enabled, _, _ := pIsWindowEnabled.Call(hwnd)
+	return enabled != 0
+}
+
+func (tip *trackingTooltip) setHoveredButton(button windows.Handle) {
+	if tip.hovered == button {
+		return
+	}
+	previous := tip.hovered
+	tip.hovered = button
+	for _, hwnd := range []windows.Handle{previous, button} {
+		if hwnd != 0 {
+			pInvalidateRect.Call(uintptr(hwnd), 0, 0)
+		}
+	}
+}
+
+// Summary refreshes hide and resize the card before showing it again. Cancel
+// a press at that boundary so a release cannot act on the replacement card.
+func (tip *trackingTooltip) cancelButtonInteraction() {
+	tip.setHoveredButton(0)
+	pressed := tip.pressed
+	tip.pressed = 0
+	if pressed == 0 {
+		return
+	}
+	pSendMessage.Call(uintptr(pressed), 0x00f3, 0, 0) // BM_SETSTATE
+	if captured, _, _ := pGetCapture.Call(); captured == uintptr(pressed) {
+		pReleaseCapture.Call()
+	}
 }

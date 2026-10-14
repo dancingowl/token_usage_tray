@@ -80,7 +80,7 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 		pDeleteObject.Call(uintptr(oldFont))
 	}
 	padding := int32(12 * dpi / 96)
-	margin := tooltipRect{padding, padding, padding, padding + int32(44*dpi/96)}
+	margin := tooltipRect{padding, padding, padding, padding + int32(48*dpi/96)}
 	pSendMessage.Call(uintptr(tip.window), ttmSetMargin, 0, uintptr(unsafe.Pointer(&margin)))
 	title, _ := windows.UTF16PtrFromString(clickTipTitle)
 	// Native title rendering supplies the bold heading above the body; the
