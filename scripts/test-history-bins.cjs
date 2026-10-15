@@ -10,7 +10,7 @@ const end = source.indexOf('function attachHistoryDetails(', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
 vm.runInContext(source.slice(start, end), context);
-const { historyInterval, historyBins, historyRange } = context;
+const { historyInterval, historyBins, historyRange, historyZoomRange } = context;
 const minute = 60000, hour = 60 * minute, day = 24 * hour;
 for (const [span, expected] of [[0, minute], [5 * hour, 10 * minute], [24 * hour, 30 * minute], [7 * day, 4 * hour], [30 * day, day]]) {
  assert.equal(historyInterval(span), expected);
@@ -48,4 +48,17 @@ assert.equal(historyBins([input[0]], minute)[0].s, input[0]);
 // Timestamp ties retain the last supplied observation; bucket placement is stable.
 assert.equal(historyBins([sample(0, 80), sample(0, 70)], minute)[0].s.left, 70);
 assert.equal(historyBins(input.slice(1), 10 * minute)[0].bucket, historyBins(input, 10 * minute)[0].bucket);
+const full = historyRange(7, at + 6 * hour);
+const zoom = historyZoomRange([sample(0, 80), sample(5 * hour, 40)], full);
+assert.ok(zoom.start >= full.start && zoom.end <= full.end);
+assert.ok(zoom.start < at && zoom.end > at + 5 * hour);
+assert.ok(zoom.end - zoom.start < 6 * hour);
+assert.equal(zoom.interval, 10 * minute);
+assert.equal(historyZoomRange([], full), full);
+assert.equal(historyZoomRange([sample(0, 80)], full), full);
+assert.equal(historyZoomRange([sample(0, 80), sample(0, 60)], full), full);
+const complete = historyZoomRange([{at:new Date(full.start).toISOString()},{at:new Date(full.end).toISOString()}], full);
+assert.equal(complete.start, full.start);
+assert.equal(complete.end, full.end);
+assert.ok(historyZoomRange([sample(0, 80), sample(1, 40)], historyRange(1, at + 1)).end > at);
 console.log('PASS: interval selection, last values incl zero, immutable input, reset/window boundaries, sparse/empty/single/tied records, stable bucket alignment');

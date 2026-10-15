@@ -27,6 +27,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .history-heading{display:flex;align-items:center;gap:12px;position:relative;margin-bottom:20px}.history-heading h2{margin:0;font-size:17px;color:var(--tx)}.history-heading .summary-note{margin-left:10px}
 .history-help{margin-left:auto}.history-help>summary{display:flex;align-items:center;justify-content:center;list-style:none;width:25px;height:25px;border:1px solid #cbd3dd;border-radius:50%;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer}.history-help>summary::-webkit-details-marker{display:none}.history-help[open]>summary{margin:0;background:#e1eeea;color:#0c695d}.history-help-content{position:absolute;right:0;top:34px;z-index:3;width:340px;max-width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;color:var(--sub);font-size:12px}.history-help-content p{margin:0 0 8px}.history-help-content p:last-child{margin:0}
 .history-range{font-size:11px;color:var(--sub);margin:4px 0 0;overflow-wrap:anywhere}
+.history-view-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px}.history-view-controls span{font-size:12px;color:var(--sub)}#history-zoom[aria-pressed="true"]{color:#0c695d;background:#e1eeea;border-color:#a9d4c9}.history-overview{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}.history-overview svg{display:block;width:100%;height:76px}.history-overview-labels{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--sub)}
 .dash-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}.dash-check{display:inline-flex;gap:7px;align-items:center;margin:4px 14px 4px 0}.dash-check input{accent-color:#0f766e;width:16px;height:16px}
 .dash-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 20px}
 .dash-fieldset{min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 14px}.dash-fieldset legend{color:var(--sub);padding:0 5px}
@@ -44,8 +45,10 @@ const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type=
 
 const dashboardHTML = `
 <div class="dashboard">
- <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>가로축은 선택한 최근 1일·7일·30일 전체입니다. 각각 30분·4시간·1일 구간의 마지막 관측 잔량을 표시합니다. 기록이 없는 시간은 빈 공간으로 남깁니다.</p><p>원본 기록은 보존하며, 초기화 전후와 빈 구간은 선으로 잇지 않습니다. 호버·터치 또는 탭 키로 선택한 지점만 강조합니다. Esc 키로 닫습니다.</p><p>소진 예상은 원본 기록의 최근 소비 속도에 따른 추정입니다.</p></div></details></div>
+ <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>기록 구간 확대를 켜면 위에는 선택 기간 전체와 확대 위치를, 아래에는 기록이 있는 구간을 크게 보여줍니다. 버튼을 다시 누르면 전체 기간 보기로 돌아갑니다.</p><p>각 시간 구간의 마지막 관측 잔량을 표시하며 확대 범위에 맞춰 간격을 조절합니다. 원본 기록은 보존하고 초기화 전후와 빈 구간은 잇지 않습니다. 호버·터치·탭 키로 상세를 확인하고 Esc로 닫습니다.</p><p>소진 예상은 원본 기록의 최근 소비 속도에 따른 추정입니다.</p></div></details></div>
   <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">한도<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
+  <div class="history-view-controls"><span id="history-view-label">전체 기간</span><button type="button" id="history-zoom" aria-pressed="true" aria-controls="history-chart history-overview" disabled>기록 구간 확대</button></div>
+  <div id="history-overview" class="history-overview" hidden></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
   <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div>
  </section>
@@ -77,7 +80,7 @@ const $ = id => document.getElementById(id);
 const names = {claude:'Claude', codex:'Codex', antigravity:'Antigravity'};
 const ruleNames = {claude5h:'Claude · 5시간',claude7d:'Claude · 주간',codex5h:'Codex · 단기',codex7d:'Codex · 주간',antigravity:'Antigravity'};
 const form = $('settings-form');
-let savedSettings = null, settingsBusy = false, historyData = null, historyRequest = 0, historySelectionInitialized = false, historySelectionTouched = false, polling = false, mutationCount = 0;
+let savedSettings = null, settingsBusy = false, historyData = null, historyRequest = 0, historySelectionInitialized = false, historySelectionTouched = false, polling = false, mutationCount = 0, historyZoom = true;
 const page = document.body.dataset.page || 'usage';
 const compact = page==='usage' && new URLSearchParams(location.search).get('view') === 'summary';
 document.body.classList.toggle('summary-view', compact);
@@ -207,6 +210,14 @@ function historyRange(days,end) {
  const duration=([1,7,30].includes(Number(days))?Number(days):7)*86400000;
  return {start:end-duration,end,interval:historyInterval(duration)};
 }
+function historyZoomRange(samples,full) {
+ if(samples.length<2)return full;
+ const first=new Date(samples[0].at).getTime(),last=new Date(samples[samples.length-1].at).getTime();
+ if(last<=first)return full;
+ const padding=Math.max(60000,(last-first)*.04);
+ const start=Math.max(full.start,first-padding),end=Math.min(full.end,last+padding);
+ return {start,end,interval:historyInterval(end-start)};
+}
 function historyCycleChanged(a,b) {return a.reset_at!==b.reset_at || a.window_seconds!==b.window_seconds;}
 function historyBins(samples,interval) {
  const bins=[];let previous=null,segment=0;
@@ -264,18 +275,37 @@ function attachHistoryDetails(chart,svg,points,dots,range) {
   dot.addEventListener('blur',()=>{focused=null;hide();});
  }
 }
+function drawHistoryOverview(samples,full,zoom,days) {
+ const container=$('history-overview');container.hidden=false;container.replaceChildren();
+ const width=Math.max(200,container.clientWidth-26),height=76;
+ const x=at=>4+(at-full.start)/(full.end-full.start)*(width-8);
+ const svg=svgElement('svg',{viewBox:'0 0 '+width+' '+height,role:'img','aria-label':'최근 '+days+'일 전체 기간. 색칠된 영역이 아래 확대 구간입니다.','data-start':full.start,'data-end':full.end});
+ svg.append(svgElement('rect',{x:4,y:4,width:width-8,height:68,rx:4,fill:'#edf1f4'}));
+ const selected=svgElement('rect',{x:x(zoom.start),y:4,width:Math.max(.5,x(zoom.end)-x(zoom.start)),height:68,fill:'#d2ebe3',stroke:'#69a995','stroke-width':1,class:'history-zoom-window','data-start':zoom.start,'data-end':zoom.end});svg.append(selected);
+ const points=historyBins(samples,full.interval).map(bin=>({...bin,x:x(new Date(bin.s.at).getTime()),y:68-bin.s.left*.6}));let segment=[];
+ function line(){if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':1.2}));segment=[];}
+ points.forEach((p,i)=>{if(i&&(p.segment!==points[i-1].segment||p.bucket-points[i-1].bucket>1))line();segment.push(p);});line();
+ const labels=textNode('div','','history-overview-labels');labels.append(textNode('span',historyShortDate(full.start)),textNode('span',historyShortDate(full.end)));
+ container.append(textNode('div','최근 '+days+'일 전체 · 색칠한 구간 확대','history-range'),svg,labels);
+}
 function drawHistory() {
  if(!historyData)return;
  const agent=$('history-agent').value, windowName=$('history-window').value;
- const {start,end,interval}=historyRange(historyData.displayDays,historyData.rangeEnd);
- const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && new Date(s.at).getTime()>=start && new Date(s.at).getTime()<=end).sort((a,b)=>new Date(a.at)-new Date(b.at));
+ const full=historyRange(historyData.displayDays,historyData.rangeEnd);
+ const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && new Date(s.at).getTime()>=full.start && new Date(s.at).getTime()<=full.end).sort((a,b)=>new Date(a.at)-new Date(b.at));
+ const zoom=historyZoomRange(samples,full),canZoom=zoom.start>full.start || zoom.end<full.end,zoomed=historyZoom && canZoom;
+ const {start,end,interval}=zoomed?zoom:full;
+ $('history-zoom').disabled=!canZoom;$('history-zoom').setAttribute('aria-pressed',String(zoomed));
+ $('history-view-label').textContent=zoomed?'기록 구간 확대':'최근 '+historyData.displayDays+'일 전체';
+ $('history-overview').hidden=true;$('history-overview').replaceChildren();
+ if(zoomed)drawHistoryOverview(samples,full,zoom,historyData.displayDays);
  const chart=$('history-chart'), focusedAt=chart.contains(document.activeElement)?document.activeElement.dataset.at:null;
  dismissHistoryDetails();dismissHistoryDetails=()=>{};chart.replaceChildren();
  if(samples.length<2)message('history-message',samples.length===1?'기록이 1개입니다. 추이를 보려면 2개 이상의 기록이 필요합니다.':'이 기간에 수집한 기록이 없습니다. 앱이 실행되는 동안 기록이 쌓입니다.');
  else message('history-message',samples.length+'개 기록 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
  {
   const width=Math.max(240,chart.clientWidth), plotWidth=width-66;
-  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 230',class:'dash-history-chart',role:'group','aria-label':names[agent]+' 최근 '+historyData.displayDays+'일 잔여 한도 이력','data-start':start,'data-end':end,'data-interval':interval});
+  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 230',class:'dash-history-chart',role:'group','aria-label':names[agent]+(zoomed?' 기록 구간 확대':' 최근 '+historyData.displayDays+'일')+' 잔여 한도 이력','data-start':start,'data-end':end,'data-interval':interval});
   for(const pct of [0,25,50,75,100]) { const y=180-pct*1.6;svg.append(svgElement('line',{x1:48,y1:y,x2:width-18,y2:y,stroke:'#dce3eb','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#626b78','font-size':12});label.textContent=pct+'%';svg.append(label); }
   const bins=historyBins(samples,interval);
   if(samples.length>1)message('history-message',historyIntervalLabel(interval)+' 간격 · 구간별 마지막 잔량 · '+bins.length+'개 표시 / '+samples.length+'개 기록');
@@ -289,11 +319,11 @@ function drawHistory() {
    const at=start+(end-start)*i/tickCount,x=48+plotWidth*i/tickCount,d=new Date(at);
    const tick=svgElement('text',{x,y:202,fill:'#626b78','font-size':11,'text-anchor':i===0?'start':i===tickCount?'end':'middle',class:'history-tick'});
    const date=svgElement('tspan',{x});date.textContent=(d.getMonth()+1)+'/'+d.getDate();tick.append(date);
-   if(historyData.displayDays===1){const clock=svgElement('tspan',{x,dy:15});clock.textContent=historyShortDate(at,false);tick.append(clock);}
+   if(end-start<=2*86400000){const clock=svgElement('tspan',{x,dy:15});clock.textContent=historyShortDate(at,false);tick.append(clock);}
    svg.append(tick);
   }
   if(!points.length){const empty=svgElement('text',{x:48+plotWidth/2,y:102,'text-anchor':'middle',fill:'#626b78','font-size':12});empty.textContent='기록 없음';svg.append(empty);}
-  chart.append(svg);chart.append(textNode('p',historyShortDate(start)+'–'+historyShortDate(end,acrossDates)+' · 최근 '+historyData.displayDays+'일 전체','history-range'));
+  chart.append(svg);chart.append(textNode('p',historyShortDate(start)+'–'+historyShortDate(end,acrossDates)+(zoomed?' · 기록 구간 확대':' · 최근 '+historyData.displayDays+'일 전체'),'history-range'));
   if(points.length)attachHistoryDetails(chart,svg,points,dots,{start,end,interval,width});
   if(focusedAt){const target=dots.reduce((best,item)=>Math.abs(new Date(item.point.s.at)-new Date(focusedAt))<Math.abs(new Date(best.point.s.at)-new Date(focusedAt))?item:best,dots[0]);if(target)target.dot.focus({preventScroll:true});}
  }
@@ -305,7 +335,7 @@ function drawHistory() {
 }
 async function loadHistory() {
  const request=++historyRequest,days=Number($('history-days').value);
- if(historyData && historyData.displayDays!==days){historyData=null;dismissHistoryDetails();$('history-chart').replaceChildren();message('history-message','기록을 불러오고 있습니다.');$('forecast-state').replaceChildren(textNode('p','예측 정보를 불러오고 있습니다.'));}
+ if(historyData && historyData.displayDays!==days){historyData=null;dismissHistoryDetails();$('history-chart').replaceChildren();$('history-overview').hidden=true;$('history-overview').replaceChildren();$('history-zoom').disabled=true;$('history-zoom').setAttribute('aria-pressed','false');$('history-view-label').textContent='최근 '+days+'일 전체';message('history-message','기록을 불러오고 있습니다.');$('forecast-state').replaceChildren(textNode('p','예측 정보를 불러오고 있습니다.'));}
  try {
   const data=await api('/api/history?days='+days);if(request!==historyRequest)return;
   const serverEnd=Date.parse(data.range_end);historyData={...data,displayDays:days,rangeEnd:Number.isFinite(serverEnd)?serverEnd:Date.now()};
@@ -321,6 +351,7 @@ async function loadHistory() {
  catch(e) { if(request===historyRequest)message('history-message',historyData?'기록을 불러오지 못했습니다. 표시된 그래프는 직전 조회 결과입니다.':'기록을 불러오지 못했습니다. 기간을 다시 선택해 주세요.',true); }
 }
 $('history-agent').addEventListener('change',()=>{historySelectionTouched=true;drawHistory();});$('history-window').addEventListener('change',()=>{historySelectionTouched=true;drawHistory();});$('history-days').addEventListener('change',()=>{historySelectionTouched=true;loadHistory();});
+$('history-zoom').addEventListener('click',()=>{historyZoom=!historyZoom;drawHistory();});
 let chartResizeFrame=0;
 window.addEventListener('resize',()=>{if(page!=='usage' || compact)return;cancelAnimationFrame(chartResizeFrame);chartResizeFrame=requestAnimationFrame(drawHistory);});
 async function refreshSnapshots() {
