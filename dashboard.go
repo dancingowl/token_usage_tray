@@ -237,6 +237,13 @@ function historyShortDate(ms,includeDate=true) {
  const d=new Date(ms),clock=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
  return (includeDate?(d.getMonth()+1)+'/'+d.getDate()+' ':'')+clock;
 }
+function forecastResetLead(forecast) {
+ const gap=forecast.reset_at*1000-Date.parse(forecast.estimated_exhaustion);
+ if(!forecast.exhausts_before_reset || !Number.isFinite(gap) || gap<=0)return '';
+ const minutes=Math.floor(gap/60000),days=Math.floor(minutes/1440),hours=Math.floor(minutes%1440/60);
+ const duration=days?days+'일'+(hours?' '+hours+'시간':''):hours?hours+'시간'+(minutes%60?' '+minutes%60+'분':''):minutes?minutes+'분':'1분 미만';
+ return '초기화보다 약 '+duration+' 먼저 소진 예상';
+}
 function attachHistoryDetails(chart,svg,points,dots,range) {
  const tooltip=textNode('div','','history-tooltip');tooltip.id='history-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;chart.append(tooltip);
  const guide=svgElement('line',{y1:20,y2:180,stroke:'#80b5a9','stroke-dasharray':'4 4','pointer-events':'none'});
@@ -331,7 +338,7 @@ function drawHistory() {
  if(forecast && Number.isFinite(forecast.daily_budget))box.append(textNode('p','리셋까지 하루 권장 사용량: '+forecast.daily_budget.toFixed(1)+'%p'));
  if(!forecast || !forecast.ready || !Number.isFinite(forecast.rate_per_day) || forecast.rate_per_day<=0) {box.append(textNode('p',forecast && forecast.reason || '소비 속도를 계산할 기록이 부족합니다. 더 많은 기록이 쌓이면 예상치를 표시합니다.'));return;}
  box.classList.toggle('risk',!!forecast.exhausts_before_reset);box.append(textNode('p','최근 소비 속도: 하루 '+forecast.rate_per_day.toFixed(1)+'%p · '+forecast.samples+'개 기록'));
- if(forecast.estimated_exhaustion)box.append(textNode('p','예상 소진: '+timeLabel(forecast.estimated_exhaustion)+(forecast.exhausts_before_reset?' · 리셋 전에 소진될 가능성이 있습니다.':' · 현재 속도에서는 리셋 전 소진 위험이 낮습니다.')));
+ if(forecast.estimated_exhaustion)box.append(textNode('p','예상 소진: '+timeLabel(forecast.estimated_exhaustion)+' · '+(forecastResetLead(forecast) || (forecast.exhausts_before_reset?'초기화 전에 소진될 가능성이 있습니다.':'현재 속도에서는 초기화 전 소진 위험이 낮습니다.'))));
 }
 async function loadHistory() {
  const request=++historyRequest,days=Number($('history-days').value);

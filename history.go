@@ -31,6 +31,7 @@ type usageForecast struct {
 	Reason              string     `json:"reason"`
 	RatePerDay          float64    `json:"rate_per_day"`
 	EstimatedExhaustion *time.Time `json:"estimated_exhaustion,omitempty"`
+	ResetAt             int64      `json:"reset_at,omitempty"`
 	ExhaustsBeforeReset bool       `json:"exhausts_before_reset"`
 	DailyBudget         *float64   `json:"daily_budget,omitempty"`
 	Samples             int        `json:"samples"`
@@ -238,6 +239,7 @@ func forecastUsageHistory(samples []usageHistorySample, now time.Time) []usageFo
 					f.RatePerDay = float64(first.Left-last.Left) / last.At.Sub(first.At).Hours() * 24
 					estimated := last.At.Add(time.Duration(float64(last.Left) / f.RatePerDay * float64(24*time.Hour)))
 					f.EstimatedExhaustion = &estimated
+					f.ResetAt = last.ResetAt
 					f.ExhaustsBeforeReset = estimated.Before(time.Unix(last.ResetAt, 0))
 					f.Ready = true
 					f.Reason = "현재 한도 주기의 첫 관측부터 최근 관측까지 감소 속도가 계속된다는 선형 예상입니다."

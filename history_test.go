@@ -59,6 +59,9 @@ func TestUsageForecastCalculation(t *testing.T) {
 	if forecast.EstimatedExhaustion == nil || !forecast.EstimatedExhaustion.Equal(now.Add(4*time.Hour)) {
 		t.Fatalf("wrong exhaustion: %+v", forecast)
 	}
+	if forecast.ResetAt != historySamples(now)[2].ResetAt {
+		t.Fatalf("forecast must expose the same cycle reset used for its comparison: %+v", forecast)
+	}
 	if forecast.DailyBudget == nil || math.Abs(*forecast.DailyBudget-240) > 0.000001 {
 		t.Fatalf("wrong quota percent per day: %+v", forecast)
 	}

@@ -10,7 +10,7 @@ const end = source.indexOf('function attachHistoryDetails(', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
 vm.runInContext(source.slice(start, end), context);
-const { historyInterval, historyBins, historyRange, historyZoomRange } = context;
+const { historyInterval, historyBins, historyRange, historyZoomRange, forecastResetLead } = context;
 const minute = 60000, hour = 60 * minute, day = 24 * hour;
 for (const [span, expected] of [[0, minute], [5 * hour, 10 * minute], [24 * hour, 30 * minute], [7 * day, 4 * hour], [30 * day, day]]) {
  assert.equal(historyInterval(span), expected);
@@ -61,4 +61,11 @@ const complete = historyZoomRange([{at:new Date(full.start).toISOString()},{at:n
 assert.equal(complete.start, full.start);
 assert.equal(complete.end, full.end);
 assert.ok(historyZoomRange([sample(0, 80), sample(1, 40)], historyRange(1, at + 1)).end > at);
+const prediction = {estimated_exhaustion:new Date(at).toISOString(),exhausts_before_reset:true};
+for(const [gap,label] of [[5*day+6*hour,'5일 6시간'],[day,'1일'],[2*hour+15*minute,'2시간 15분'],[45*minute,'45분'],[30000,'1분 미만']]) {
+ assert.equal(forecastResetLead({...prediction,reset_at:(at+gap)/1000}), '초기화보다 약 '+label+' 먼저 소진 예상');
+}
+for(const invalid of [{}, {reset_at:0}, {reset_at:at/1000}, {reset_at:(at-minute)/1000}, {reset_at:(at+day)/1000,exhausts_before_reset:false}, {reset_at:(at+day)/1000,estimated_exhaustion:'invalid'}]) {
+ assert.equal(forecastResetLead({...prediction,...invalid}), '');
+}
 console.log('PASS: interval selection, last values incl zero, immutable input, reset/window boundaries, sparse/empty/single/tied records, stable bucket alignment');
