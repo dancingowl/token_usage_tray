@@ -30,7 +30,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .dash-fieldset{min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 14px}.dash-fieldset legend{color:var(--sub);padding:0 5px}
 .dash-rules{overflow:auto}.dash-rules th,.dash-rules td{padding:8px 9px;white-space:nowrap}.dash-rules input[type=number]{width:80px}.dash-rules input[type=checkbox]{width:16px;height:16px;accent-color:#0f766e}
 details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
-.dash-history-chart{width:100%;height:230px;display:block}.dash-chart-wrap{overflow:hidden;margin:14px 0 6px}.dash-chart-labels{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--sub)}.dash-chart-point:focus{outline:none;stroke:#202938;stroke-width:3}
+.dash-history-chart{width:100%;height:230px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-labels{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--sub)}.dash-chart-point:focus{outline:none;stroke:#202938;stroke-width:3}
+.history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
 .dash-forecast{border-left:3px solid #0f766e;padding:10px 14px;background:#f2f8f6;border-radius:8px;font-size:13px}.dash-forecast.risk{border-color:var(--bad);background:#fff5f5}.dash-forecast p{margin:4px 0}.dash-release{color:#0f766e}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
 body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .cl{font-size:26px}
 @media(max-width:620px){.dash-grid{grid-template-columns:1fr}.dash-form-grid{grid-template-columns:1fr}.dash-actions select{max-width:100%}.summary-note{display:none}.quick-toolbar{justify-content:flex-start}.quick-toolbar .dash-message{text-align:left}}
@@ -44,7 +45,7 @@ const dashboardHTML = `
  <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2>
   <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">한도<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
-  <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div><details class="dash-help"><summary>그래프와 예상치 안내</summary><p>점을 가리키거나 탭 키로 선택하면 시각·잔여량·출처·초기화를 확인합니다. 초기화 구간은 선을 잇지 않습니다. 예상치는 최근 소비 속도에 따른 추정입니다.</p></details>
+  <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div><details class="dash-help"><summary>그래프와 예상치 안내</summary><p>그래프에 마우스를 올리거나 터치하면 가까운 기록의 시각·잔여량·출처·초기화가 표시됩니다. 탭 키로 점을 선택해도 확인할 수 있고 Esc 키로 닫습니다. 초기화 구간은 선을 잇지 않습니다. 예상치는 최근 소비 속도에 따른 추정입니다.</p></details>
  </section>
  <section id="settings" class="dashboard-full"><div id="settings-details" class="panel page-section"><h2>설정<span class="summary-note">표시 · 알림 · 자동 실행</span></h2>
   <form id="settings-form"><fieldset id="settings-fields" class="dash-fieldset" disabled><legend>트레이와 수집</legend>
@@ -192,26 +193,68 @@ async function loadUpdate(check) {
 }
 $('check-update').addEventListener('click',()=>loadUpdate(true));
 function svgElement(tag,attrs) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e; }
+let dismissHistoryDetails=()=>{};
+document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissHistoryDetails();});
+document.addEventListener('pointerdown',event=>{if(!$('history-chart').contains(event.target))dismissHistoryDetails();});
+function attachHistoryDetails(chart,svg,points,dots) {
+ const tooltip=textNode('div','','history-tooltip');tooltip.id='history-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;chart.append(tooltip);
+ const guide=svgElement('line',{y1:20,y2:180,stroke:'#80b5a9','stroke-dasharray':'4 4','pointer-events':'none'});
+ const marker=svgElement('circle',{r:6,fill:'#fff',stroke:'#0f766e','stroke-width':3,'pointer-events':'none'});
+ svg.append(guide,marker);
+ let focused=null;
+ function hide(){tooltip.hidden=true;guide.style.display='none';marker.style.display='none';}
+ dismissHistoryDetails=hide;hide();
+ function show(p){
+  const matrix=svg.getScreenCTM();if(!matrix)return;
+  const s=p.s,source=({live:'실시간',api:'실시간',cache:'캐시',local:'로컬 기록'})[s.source] || s.source || '미확인';
+  tooltip.replaceChildren(textNode('p',timeLabel(s.at),'tooltip-time'),textNode('strong',s.left+'% 남음'),textNode('p','출처 · '+source),textNode('p','초기화 · '+(s.reset_at>0?timeLabel(s.reset_at*1000):'미확인')));
+  tooltip.hidden=false;guide.style.display='';marker.style.display='';guide.setAttribute('x1',p.x);guide.setAttribute('x2',p.x);marker.setAttribute('cx',p.x);marker.setAttribute('cy',p.y);
+  const position=new DOMPoint(p.x,p.y).matrixTransform(matrix),bounds=chart.getBoundingClientRect();
+  const x=position.x-bounds.left,y=position.y-bounds.top;
+  tooltip.style.left=Math.max(8,Math.min(x+14,chart.clientWidth-tooltip.offsetWidth-8))+'px';
+  const above=y-tooltip.offsetHeight-14;
+  tooltip.style.top=Math.max(8,Math.min(above>=8?above:y+14,chart.clientHeight-tooltip.offsetHeight-8))+'px';
+ }
+ function inspect(event){
+  const matrix=svg.getScreenCTM();if(!matrix)return;
+  const pos=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
+  // Inspect the nearest actual sample, including records omitted from the drawn dots.
+  const nearest=points.reduce((best,p)=>Math.abs(p.x-pos.x)<Math.abs(best.x-pos.x)?p:best,points[0]);
+  show(nearest);
+ }
+ svg.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')inspect(event);});
+ svg.addEventListener('pointerdown',inspect);
+ svg.addEventListener('pointerleave',event=>{if(event.pointerType==='touch')return;if(focused)show(focused);else hide();});
+ for(const {dot,point} of dots){
+  dot.setAttribute('aria-describedby',tooltip.id);
+  dot.addEventListener('focus',()=>{focused=point;show(point);});
+  dot.addEventListener('blur',()=>{focused=null;hide();});
+ }
+}
 function drawHistory() {
  if(!historyData)return;
  const agent=$('history-agent').value, windowName=$('history-window').value;
  const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && !isNaN(new Date(s.at))).sort((a,b)=>new Date(a.at)-new Date(b.at));
- const chart=$('history-chart');chart.replaceChildren();
+ const chart=$('history-chart'), focusedAt=chart.contains(document.activeElement)?document.activeElement.dataset.at:null;
+ dismissHistoryDetails();dismissHistoryDetails=()=>{};chart.replaceChildren();
  if(samples.length<2)message('history-message',samples.length===1?'기록이 1개입니다. 추이를 보려면 2개 이상의 기록이 필요합니다.':'이 기간에 수집한 기록이 없습니다. 앱이 실행되는 동안 기록이 쌓입니다.');
  else message('history-message',samples.length+'개 기록 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
  if(samples.length) {
   const width=Math.max(240,chart.clientWidth), plotWidth=width-66;
-  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 210',class:'dash-history-chart',role:'img','aria-label':names[agent]+' 잔여 한도 이력'}); const start=new Date(samples[0].at).getTime(), end=new Date(samples[samples.length-1].at).getTime();
+  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 210',class:'dash-history-chart',role:'group','aria-label':names[agent]+' 잔여 한도 이력'}); const start=new Date(samples[0].at).getTime(), end=new Date(samples[samples.length-1].at).getTime();
   for(const pct of [0,25,50,75,100]) { const y=180-pct*1.6;svg.append(svgElement('line',{x1:48,y1:y,x2:width-18,y2:y,stroke:'#dce3eb','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#626b78','font-size':12});label.textContent=pct+'%';svg.append(label); }
   // Keep long-running histories responsive while retaining reset boundaries.
   const stride=Math.max(1,Math.ceil(samples.length/600));
   const displayed=samples.filter((s,i)=>i%stride===0 || i===samples.length-1 || (i>0 && s.reset_at!==samples[i-1].reset_at) || (i+1<samples.length && s.reset_at!==samples[i+1].reset_at));
   if(displayed.length<samples.length)message('history-message',samples.length+'개 기록 중 '+displayed.length+'개 대표 지점 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
-  const points=displayed.map(s=>({s,x:end===start?48+plotWidth/2:48+(new Date(s.at).getTime()-start)/(end-start)*plotWidth,y:180-s.left*1.6}));let segment=[];
+  const pointFor=s=>({s,x:end===start?48+plotWidth/2:48+(new Date(s.at).getTime()-start)/(end-start)*plotWidth,y:180-s.left*1.6});
+  const points=displayed.map(pointFor), dots=[];let segment=[];
   function line() { if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':2}));segment=[]; }
   points.forEach((p,index)=>{if(index && p.s.reset_at!==points[index-1].s.reset_at)line();segment.push(p);});line();
-  for(const p of points) { const label=timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,fill:'#0f766e',tabindex:0,class:'dash-chart-point','aria-label':label});const title=svgElement('title',{});title.textContent=label;dot.append(title);svg.append(dot); }
+  for(const p of points) { const label=timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,fill:'#0f766e',tabindex:0,class:'dash-chart-point','aria-label':label,'data-at':p.s.at});svg.append(dot);dots.push({dot,point:p}); }
   chart.append(svg);const labels=document.createElement('div');labels.className='dash-chart-labels';labels.append(textNode('span',timeLabel(samples[0].at)),textNode('span',timeLabel(samples[samples.length-1].at)));chart.append(labels);
+  attachHistoryDetails(chart,svg,samples.map(pointFor),dots);
+  if(focusedAt){const target=dots.find(({point})=>point.s.at===focusedAt);if(target)target.dot.focus({preventScroll:true});}
  }
  const forecast=(historyData.forecasts || []).find(f=>f.agent===agent && f.window===windowName), box=$('forecast-state');box.replaceChildren();box.classList.remove('risk');
  if(forecast && Number.isFinite(forecast.daily_budget))box.append(textNode('p','리셋까지 하루 권장 사용량: '+forecast.daily_budget.toFixed(1)+'%p'));
