@@ -74,7 +74,7 @@ func TestPageViewsHaveSeparateNavigationAndPreservePollingTargets(t *testing.T) 
 			view = "usage"
 		}
 		for _, want := range []string{
-			`<title>Usage Tray · ` + tt.title + `</title>`, `<h1>` + tt.title + `</h1>`,
+			`<title>Usage Tray · ` + tt.title + `</title>`, `<h1>Usage Tray</h1>`,
 			`<body data-page="` + view + `">`, `<a href="` + tt.path + `" aria-current="page">` + tt.title + `</a>`,
 			`id="usage-snapshot"`, `id="token-snapshot"`, `id="settings-form"`,
 		} {

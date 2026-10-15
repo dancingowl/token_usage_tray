@@ -240,16 +240,18 @@ html{scroll-behavior:smooth;scroll-padding-top:20px}
 body{margin:0 auto;max-width:1040px;background:var(--bg);color:var(--tx);
   font:14px/1.55 "Segoe UI","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;padding:28px 24px 34px}
 .num,em,.cl,.ch-line span,.ch-x{font-variant-numeric:tabular-nums}
-header{display:flex;align-items:center;flex-wrap:wrap;gap:14px 24px;margin-bottom:22px}
+header{margin-bottom:22px}
+.header-top{display:flex;align-items:center;justify-content:space-between;gap:16px 24px;flex-wrap:wrap;margin-bottom:20px}
+.header-status{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;margin-left:auto}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .app-icon{width:34px;height:34px;flex:none;border-radius:9px}
 h1{font-size:21px;line-height:1.2;letter-spacing:-.03em;margin:0;font-weight:750}
-.meta{color:var(--dim);font-size:11px;margin-top:4px}
+.meta{color:var(--dim);font-size:12px}
 .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#39a68e;margin-right:5px;vertical-align:2px}
-.page-nav{margin-left:auto;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
-.page-nav a{color:var(--sub);font-size:13px;text-decoration:none;border-radius:8px;padding:7px 11px}
-.page-nav a:hover{background:#e8efed;color:var(--accent)}
-.page-nav a[aria-current="page"]{background:#e1eeea;color:#0c695d;font-weight:700}
+.page-nav{display:flex;align-items:center;gap:28px;border-bottom:1px solid var(--line)}
+.page-nav a{color:var(--sub);font-size:14px;text-decoration:none;padding:10px 0 12px;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.page-nav a:hover{color:var(--accent);border-bottom-color:#a9d4c9}
+.page-nav a[aria-current="page"]{border-bottom-color:var(--accent);color:#0c695d;font-weight:700}
 body:not([data-page="usage"]) #usage-snapshot,body:not([data-page="tokens"]) #token-details{display:none}
 a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .row{display:grid;gap:12px;margin-bottom:14px;min-width:0}
@@ -323,8 +325,9 @@ footer{color:var(--dim);font-size:11px;margin-top:16px;overflow-wrap:anywhere}
   .ch-x.sec{visibility:hidden}
 }
 @media(max-width:480px){
-  body{padding:20px 14px 26px}header{gap:12px;margin-bottom:16px}
-  .page-nav{margin-left:0;width:100%;gap:3px}.page-nav a{padding:5px 10px}
+  body{padding:20px 14px 26px}header{margin-bottom:16px}
+  .header-top{gap:14px;margin-bottom:12px}.header-status{width:100%;margin-left:0;justify-content:space-between;gap:8px}.meta{font-size:11px}
+  .page-nav{gap:24px}.page-nav a{font-size:13px;padding:9px 0 11px}
   .card,.panel{padding:15px}.cl{font-size:27px}.ct{font-size:13px;gap:6px}
   .cl span{font-size:11px}.card-top{gap:8px}.token-details .panel{padding:12px}
 }
@@ -352,10 +355,10 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 <link rel="icon" href="data:image/png;base64,` + base64.StdEncoding.EncodeToString(faviconPNG) + `">
 <title>Usage Tray · ` + pageTitle + `</title><style>` + pageCSS + dashboardCSS + `</style></head><body data-page="` + view + `">`)
 
-	fmt.Fprintf(&b, `<header><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
-		`<div><h1>%s</h1><div class="meta" id="snapshot-time"><span class="dot"></span>Usage Tray · %s 갱신 · 자동 갱신</div></div></div>`+
-		`<nav class="page-nav" aria-label="화면 이동">`,
-		base64.StdEncoding.EncodeToString(faviconPNG), pageTitle, s.Updated.Local().Format("15:04:05"))
+	fmt.Fprintf(&b, `<header><div class="header-top"><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
+		`<h1>Usage Tray</h1></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div>`,
+		base64.StdEncoding.EncodeToString(faviconPNG), s.Updated.Local().Format("15:04:05"))
+	b.WriteString(headerActionsHTML + `</div></div><p id="action-message" class="dash-message header-message" role="status" aria-live="polite"></p><nav class="page-nav" aria-label="화면 이동">`)
 	for _, item := range []struct{ view, path, label string }{
 		{"usage", "/", "한도 현황"}, {"tokens", "/tokens", "토큰 통계"}, {"settings", "/settings", "설정"},
 	} {

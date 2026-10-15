@@ -6,7 +6,7 @@ const dashboardCSS = `
 [hidden]{display:none!important}
 .dashboard{margin-bottom:14px}.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:24px;margin-top:20px}
 body:not([data-page="usage"]) #history-details,body:not([data-page="settings"]) #settings,body:not([data-page="settings"]) #system-details{display:none}
-body[data-page="settings"] .quick-toolbar{display:none}
+
 
 .page-section{margin-bottom:16px}.page-section>h2{font-size:17px;color:var(--tx);margin-bottom:20px}.page-section>h2 .summary-note{margin-left:10px}
 .dash-panel{margin-bottom:14px}.dash-panel h2{font-size:15px;color:var(--tx);margin-bottom:12px}
@@ -22,7 +22,7 @@ button.primary{background:#0f766e;border-color:#258b83;color:#fff}button.primary
 button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #0f766e;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){button,.button{transition:none}}
 .dash-note{font-size:12px;color:var(--sub);margin:8px 0;overflow-wrap:anywhere}.dash-message{color:#0f766e;font-size:13px;margin:8px 0 0;overflow-wrap:anywhere}.dash-message:empty{display:none}.dash-message.error{color:var(--bad)}
-.quick-toolbar{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin:4px 0 24px}.quick-toolbar .dash-message{flex-basis:100%;text-align:right}
+.quick-toolbar{margin:0}.header-message{margin:0 0 12px;text-align:right}
 .disclosure{margin-bottom:12px;scroll-margin-top:24px}.disclosure>summary{display:flex;align-items:center;gap:12px;list-style:none;min-height:26px}.disclosure>summary::-webkit-details-marker{display:none}.disclosure>summary:after{content:'+';font-size:21px;font-weight:400;color:var(--sub);margin-left:auto}.disclosure[open]>summary:after{content:'−'}.summary-note{font-size:12px;font-weight:400;color:var(--sub)}
 .dash-help{margin-top:12px;font-size:12px;color:var(--sub)}.dash-help>summary{font-size:12px;font-weight:400}.dash-help[open]>summary{margin-bottom:4px}
 .dash-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}.dash-check{display:inline-flex;gap:7px;align-items:center;margin:4px 14px 4px 0}.dash-check input{accent-color:#0f766e;width:16px;height:16px}
@@ -37,12 +37,10 @@ body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot
 @media(max-width:620px){.history-controls{grid-template-columns:1fr}.history-controls label{display:grid;grid-template-columns:60px minmax(0,1fr)}.history-controls select{width:100%}.dash-chart-labels{font-size:11px}}
 `
 
+const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button><button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>`
+
 const dashboardHTML = `
 <div class="dashboard">
- <section class="quick-toolbar" aria-label="빠른 작업">
-  <div class="dash-actions"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button><button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>
-  <p id="action-message" class="dash-message" role="status" aria-live="polite"></p>
- </section>
  <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2>
   <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">한도<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
