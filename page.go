@@ -261,7 +261,7 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .card{padding:17px 19px;box-shadow:0 2px 5px #20293803}
 .cbody{min-width:0}
 .card-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.ct{font-weight:650;font-size:14px;display:flex;align-items:center;gap:8px;min-width:0}
+.ct{font-weight:650;font-size:14px;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;text-align:right;margin-left:auto}
 .ct-label{overflow-wrap:anywhere}
 .cl{font-size:29px;font-weight:750;line-height:1.2;white-space:nowrap;letter-spacing:-.03em}
 .cl span{font-size:12px;color:var(--sub);font-weight:500;margin-left:3px;letter-spacing:0}
@@ -269,8 +269,8 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .cl.warn{color:var(--warn)}.cl.bad{color:var(--bad)}
 .cs{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;color:var(--sub);font-size:13px;margin-top:12px;flex-wrap:wrap}
 .cs strong{font-size:14px;color:var(--tx);font-weight:750}
-.cs time{white-space:nowrap;font-variant-numeric:tabular-nums}
-.card-notes{color:var(--dim);font-size:11px;margin-top:5px;overflow-wrap:anywhere}
+.cs time{white-space:nowrap;font-variant-numeric:tabular-nums;margin-left:auto}
+.card-notes{color:var(--dim);font-size:11px;margin-top:5px;overflow-wrap:anywhere;text-align:right}
 .card-note.bad{color:var(--bad)}.card-note.live{color:var(--accent)}
 .chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:11px;line-height:1.3;padding:3px 7px;border-radius:6px}
 .panel{padding:17px 19px}
@@ -582,10 +582,10 @@ func cardHTMLAt(c gaugeCard, now time.Time) string {
 		info = `<div class="card-notes">` + notes.String() + `</div>`
 	}
 	return fmt.Sprintf(`<div class="card" data-agent="%s"><div class="cbody"><div class="card-top">`+
-		`<div class="ct">%s<span class="ct-label">%s</span></div><div class="cl%s">%s</div></div>`+
+		`<div class="cl%s">%s</div><div class="ct">%s<span class="ct-label">%s</span></div></div>`+
 		`<div class="cs">%s</div>%s</div></div>`,
-		strings.ToLower(c.Mark.name), agentIcon(c.Mark, "sm"), html.EscapeString(c.Title),
-		cls, left, resetHTML, info)
+		strings.ToLower(c.Mark.name), cls, left, agentIcon(c.Mark, "sm"), html.EscapeString(c.Title),
+		resetHTML, info)
 }
 
 func statHTML(title string, m agentMark, pairs [][2]string) string {
