@@ -4,46 +4,49 @@ package main
 // refresh. The existing token charts are refreshed separately from the form.
 const dashboardCSS = `
 [hidden]{display:none!important}
-.dashboard{margin-bottom:14px}.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;margin-bottom:14px}
+.dashboard{margin-bottom:14px}.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:24px;margin-top:20px}
 .dash-panel{margin-bottom:14px}.dash-panel h2{font-size:15px;color:var(--tx);margin-bottom:12px}
 .dash-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-select,input[type=number]{font:inherit;color:var(--tx);background:var(--panel2);border:1px solid #535969;border-radius:7px;padding:7px 10px}
-button,.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:8px 14px;box-sizing:border-box;font:inherit;font-weight:600;line-height:1.2;color:#edf2f7;background:#2a3039;border:1px solid #475263;border-radius:8px;text-decoration:none;cursor:pointer;transition:background-color .14s,border-color .14s,box-shadow .14s}
-button:hover:not(:disabled),.button:hover{background:#35404d;border-color:#6a7b91;box-shadow:0 1px 3px #0003}button:active:not(:disabled),.button:active{background:#222a33;border-color:#8295ad;box-shadow:none}
-button:disabled{color:#9ba7b6;background:#252a32;border-color:#3b4552;opacity:.65;cursor:default;box-shadow:none}
+select,input[type=number]{min-height:36px;min-width:0;max-width:100%;font:inherit;color:var(--tx);background:#fff;border:1px solid #cbd3dd;border-radius:8px;padding:7px 10px}
+button,.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:8px 14px;box-sizing:border-box;font:inherit;font-weight:600;line-height:1.2;color:#202938;background:#f3f5f8;border:1px solid #d7dfe8;border-radius:8px;text-decoration:none;cursor:pointer;transition:background-color .14s,border-color .14s}
+button:hover:not(:disabled),.button:hover{background:#e8edf4;border-color:#aab8c8}button:active:not(:disabled),.button:active{background:#dde5f0;border-color:#9aa8b6}
+button:disabled{color:#758291;background:#f5f6f8;border-color:#e1e5ea;opacity:.7;cursor:default}
 button.primary{background:#0f766e;border-color:#258b83;color:#fff}button.primary:hover:not(:disabled){background:#115e59;border-color:#35a298}button.primary:active:not(:disabled){background:#134e4a}button.primary:disabled{background:#29433f;border-color:#3c5752;color:#b1bfba}
-.button.subtle{background:transparent;border-color:transparent;color:#cbd5e1}.button.subtle:hover{background:#2a3039;border-color:#475263;color:#fff}
+.button.subtle{background:transparent;border-color:transparent;color:#526171}.button.subtle:hover{background:#e8edf4;border-color:#d7dfe8;color:#202938}
 .button-icon{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
-button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:3px}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #0f766e;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){button,.button{transition:none}}
-.dash-note{font-size:12px;color:var(--sub);margin:8px 0}.dash-message{min-height:22px;color:#a5d7ff;font-size:13px;margin:8px 0 0}.dash-message.error{color:var(--bad)}
-.dash-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}.dash-check{display:inline-flex;gap:7px;align-items:center;margin:4px 14px 4px 0}.dash-check input{accent-color:#7ba7ed;width:16px;height:16px}
+.dash-note{font-size:12px;color:var(--sub);margin:8px 0;overflow-wrap:anywhere}.dash-message{color:#0f766e;font-size:13px;margin:8px 0 0;overflow-wrap:anywhere}.dash-message:empty{display:none}.dash-message.error{color:var(--bad)}
+.quick-toolbar{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin:4px 0 24px}.quick-toolbar .dash-message{flex-basis:100%;text-align:right}
+.disclosure{margin-bottom:12px;scroll-margin-top:24px}.disclosure>summary{display:flex;align-items:center;gap:12px;list-style:none;min-height:26px}.disclosure>summary::-webkit-details-marker{display:none}.disclosure>summary:after{content:'+';font-size:21px;font-weight:400;color:var(--sub);margin-left:auto}.disclosure[open]>summary:after{content:'−'}.summary-note{font-size:12px;font-weight:400;color:var(--sub)}
+.dash-help{margin-top:12px;font-size:12px;color:var(--sub)}.dash-help>summary{font-size:12px;font-weight:400}.dash-help[open]>summary{margin-bottom:4px}
+.dash-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}.dash-check{display:inline-flex;gap:7px;align-items:center;margin:4px 14px 4px 0}.dash-check input{accent-color:#0f766e;width:16px;height:16px}
 .dash-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 20px}
-.dash-fieldset{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 14px}.dash-fieldset legend{color:var(--sub);padding:0 5px}
-.dash-rules{overflow:auto}.dash-rules th,.dash-rules td{padding:8px 9px;white-space:nowrap}.dash-rules input[type=number]{width:80px}.dash-rules input[type=checkbox]{width:16px;height:16px;accent-color:#7ba7ed}
-details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
-.dash-history-chart{width:100%;height:230px;display:block}.dash-chart-wrap{overflow:hidden;margin:14px 0 6px}.dash-chart-labels{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--sub)}.dash-chart-point:focus{outline:none;stroke:#fff;stroke-width:3}
-.dash-forecast{border-left:3px solid #7ba7ed;padding:8px 12px;background:var(--panel2);border-radius:4px;font-size:13px}.dash-forecast.risk{border-color:var(--bad)}.dash-forecast p{margin:4px 0}.dash-release{color:#a5d7ff}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
-body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .card img{width:54px;height:54px}body.summary-view .cl{font-size:26px}
-@media(max-width:620px){.dash-grid{grid-template-columns:1fr}.dash-form-grid{grid-template-columns:1fr}.dash-actions select{max-width:100%}}
+.dash-fieldset{min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 14px}.dash-fieldset legend{color:var(--sub);padding:0 5px}
+.dash-rules{overflow:auto}.dash-rules th,.dash-rules td{padding:8px 9px;white-space:nowrap}.dash-rules input[type=number]{width:80px}.dash-rules input[type=checkbox]{width:16px;height:16px;accent-color:#0f766e}
+details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
+.dash-history-chart{width:100%;height:230px;display:block}.dash-chart-wrap{overflow:hidden;margin:14px 0 6px}.dash-chart-labels{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--sub)}.dash-chart-point:focus{outline:none;stroke:#202938;stroke-width:3}
+.dash-forecast{border-left:3px solid #0f766e;padding:10px 14px;background:#f2f8f6;border-radius:8px;font-size:13px}.dash-forecast.risk{border-color:var(--bad);background:#fff5f5}.dash-forecast p{margin:4px 0}.dash-release{color:#0f766e}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
+body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .cl{font-size:26px}
+@media(max-width:620px){.dash-grid{grid-template-columns:1fr}.dash-form-grid{grid-template-columns:1fr}.dash-actions select{max-width:100%}.summary-note{display:none}.quick-toolbar{justify-content:flex-start}.quick-toolbar .dash-message{text-align:left}}
 `
 
 const dashboardHTML = `
 <div class="dashboard">
- <section class="panel dash-panel" aria-labelledby="quick-title"><h2 id="quick-title">빠른 작업</h2>
+ <section class="quick-toolbar" aria-label="빠른 작업">
   <div class="dash-actions"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button><button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/#settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>
   <p id="action-message" class="dash-message" role="status" aria-live="polite"></p>
  </section>
- <div class="dash-grid">
-  <section class="panel" aria-labelledby="status-title"><h2 id="status-title">연결과 데이터 상태</h2><div id="agent-status"><p class="none">상태를 확인하고 있습니다.</p></div><p id="activity-state" class="dash-note"></p><p id="status-message" class="dash-message" role="status"></p></section>
-  <section class="panel dashboard-full" aria-labelledby="update-title"><h2 id="update-title">앱 업데이트</h2><p id="update-state" class="dash-note">버전 정보를 확인하고 있습니다.</p><div class="dash-actions"><button type="button" id="check-update">업데이트 확인</button><a class="dash-release" id="release-link" target="_blank" rel="noopener noreferrer" hidden>릴리스와 다운로드 열기</a></div><p class="dash-note">설치 파일은 릴리스 페이지에서 직접 다운로드합니다.</p><pre id="update-notes" class="dash-update-notes" hidden></pre><p id="update-message" class="dash-message" role="status" aria-live="polite"></p></section>
- </div>
- <section class="panel dash-panel dashboard-full" aria-labelledby="history-title"><h2 id="history-title">잔여 한도 이력과 예상</h2>
+ <details id="history-details" class="panel disclosure dashboard-full"><summary id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></summary>
   <div class="dash-actions"><label for="history-agent">에이전트</label><select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select><label for="history-window">한도</label><select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select><label for="history-days">기간</label><select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></div>
-  <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div><p class="dash-note">그래프의 점에 마우스를 올리거나 탭 키로 선택하면 시각, 잔여량, 출처와 리셋을 확인할 수 있습니다. 리셋이 바뀐 구간은 선을 잇지 않습니다.</p>
-  <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div><p class="dash-note">예측은 최근 소비 속도를 기준으로 한 추정치이며 실제 한도와 리셋 시각은 달라질 수 있습니다.</p>
- </section>
- <section id="settings" class="panel dash-panel dashboard-full"><details id="settings-details"><summary>표시와 알림 설정</summary>
+  <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
+  <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div><details class="dash-help"><summary>그래프와 예상치 안내</summary><p>점을 가리키거나 탭 키로 선택하면 시각·잔여량·출처·초기화를 확인합니다. 초기화 구간은 선을 잇지 않습니다. 예상치는 최근 소비 속도에 따른 추정입니다.</p></details>
+ </details>
+ <details id="system-details" class="panel disclosure dashboard-full"><summary>앱 상태<span class="summary-note">연결 · 업데이트</span></summary><div class="dash-grid">
+  <section aria-labelledby="status-title"><h2 id="status-title">연결 상태</h2><div id="agent-status"><p class="none">상태를 확인하고 있습니다.</p></div><p id="activity-state" class="dash-note"></p><p id="status-message" class="dash-message" role="status"></p></section>
+  <section aria-labelledby="update-title"><h2 id="update-title">업데이트</h2><p id="update-state" class="dash-note">버전 정보를 확인하고 있습니다.</p><div class="dash-actions"><button type="button" id="check-update">업데이트 확인</button><a class="dash-release" id="release-link" target="_blank" rel="noopener noreferrer" hidden>릴리스 열기</a></div><pre id="update-notes" class="dash-update-notes" hidden></pre><p id="update-message" class="dash-message" role="status" aria-live="polite"></p></section>
+ </div></details>
+ <section id="settings" class="dashboard-full"><details id="settings-details" class="panel disclosure"><summary>설정<span class="summary-note">표시 · 알림 · 자동 실행</span></summary>
   <form id="settings-form"><fieldset id="settings-fields" class="dash-fieldset" disabled><legend>트레이와 수집</legend>
    <div class="dash-form-grid"><label class="dash-field">아이콘 표시<select name="icon_style"><option value="donut">도넛 · 남은 비율</option><option value="number">숫자 · 남은 퍼센트</option></select></label><label class="dash-field">아이콘에 표시할 한도<select name="display_window"><option value="week">주간 한도</option><option value="short">단기 한도</option><option value="urgent">잔여 비율이 가장 낮은 한도</option></select></label><label class="dash-field">수집 간격 (초)<input name="poll_seconds" type="number" min="60" max="3600" step="1" required><span class="dash-note">60~3,600초 · 변경 후 다음 수집부터 적용</span></label></div>
    <p class="dash-note">API 요청 보호를 위해 Claude는 최소 3분, Codex는 최소 2분 간격으로 조회합니다. 더 짧은 수집 간격을 선택해도 이 제한은 유지됩니다.</p>
@@ -70,9 +73,20 @@ const form = $('settings-form');
 let savedSettings = null, settingsBusy = false, historyData = null, historyRequest = 0, historySelectionInitialized = false, historySelectionTouched = false, polling = false, mutationCount = 0;
 const compact = new URLSearchParams(location.search).get('view') === 'summary';
 document.body.classList.toggle('summary-view', compact);
-if (!compact) $('detail-action').hidden = true;
-function openSettingsAnchor() { if(location.hash==='#settings') { $('settings-details').open=true;$('settings').scrollIntoView({block:'start'}); } }
+if (!compact) { $('detail-action').hidden = true;document.querySelector('.quick-toolbar a[href="/#settings"]').hidden=true; }
+function openSettingsAnchor() {
+ if(compact)return;
+ const target=({'#settings':'settings-details','#token-details':'token-details','#history-details':'history-details','#system-details':'system-details'})[location.hash];
+ if(target && $(target)) { $(target).open=true;$(target).scrollIntoView({block:'start'}); }
+}
 openSettingsAnchor();window.addEventListener('hashchange',openSettingsAnchor);
+document.addEventListener('click',event=>{
+ const anchor=event.target.closest('a[href]');if(!anchor || event.defaultPrevented || event.button!==0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || (anchor.target && anchor.target!=='_self'))return;
+ const target=new URL(anchor.href,location.href);
+ if(target.origin!==location.origin || target.pathname!==location.pathname || target.search!==location.search)return;
+ if(!['#settings','#token-details','#history-details','#system-details'].includes(target.hash))return;
+ event.preventDefault();if(location.hash===target.hash)openSettingsAnchor();else location.hash=target.hash;
+});
 function message(id, text, error) { const e=$(id); e.textContent=text; e.classList.toggle('error',!!error); }
 function textNode(tag, text, className) { const e=document.createElement(tag); e.textContent=text; if(className)e.className=className; return e; }
 function timeLabel(value) { const d=new Date(value); return value && !isNaN(d) ? d.toLocaleString('ko-KR') : '아직 성공한 기록 없음'; }
@@ -141,8 +155,7 @@ async function loadStatus() {
   for(const agent of data.agents || []) {
    const row=document.createElement('div');row.className='dash-status-row';row.dataset.agent=agent.name.toLowerCase();
    const title=document.createElement('div');title.className='dash-status-title';title.append(textNode('strong',agent.name),textNode('span',agent.label || '상태 확인 중','chip'+(['error','auth_error'].includes(agent.status)?' bad':'')));row.append(title);
-   row.append(textNode('p','마지막 성공: '+timeLabel(agent.last_success)+(agent.last_success && agent.age_minutes>=0?' · '+agent.age_minutes+'분 전':'')));
-   if(agent.source)row.append(textNode('p','출처: '+agent.source));
+   row.append(textNode('p','갱신 '+timeLabel(agent.last_success)+(agent.last_success && agent.age_minutes>=0?' · '+agent.age_minutes+'분 전':'')+(agent.source?' · '+agent.source:'')));
    if(agent.error)row.append(textNode('p',agent.error));
    container.append(row);
   }
@@ -184,15 +197,15 @@ function drawHistory() {
  else message('history-message',samples.length+'개 기록 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
  if(samples.length) {
   const svg=svgElement('svg',{viewBox:'0 0 640 210',class:'dash-history-chart',role:'img','aria-label':names[agent]+' 잔여 한도 이력'}); const start=new Date(samples[0].at).getTime(), end=new Date(samples[samples.length-1].at).getTime();
-  for(const pct of [0,25,50,75,100]) { const y=180-pct*1.6;svg.append(svgElement('line',{x1:48,y1:y,x2:622,y2:y,stroke:'#3a3f4b','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#c2c6d0','font-size':12});label.textContent=pct+'%';svg.append(label); }
+  for(const pct of [0,25,50,75,100]) { const y=180-pct*1.6;svg.append(svgElement('line',{x1:48,y1:y,x2:622,y2:y,stroke:'#dce3eb','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#626b78','font-size':12});label.textContent=pct+'%';svg.append(label); }
   // Keep long-running histories responsive while retaining reset boundaries.
   const stride=Math.max(1,Math.ceil(samples.length/600));
   const displayed=samples.filter((s,i)=>i%stride===0 || i===samples.length-1 || (i>0 && s.reset_at!==samples[i-1].reset_at) || (i+1<samples.length && s.reset_at!==samples[i+1].reset_at));
   if(displayed.length<samples.length)message('history-message',samples.length+'개 기록 중 '+displayed.length+'개 대표 지점 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
   const points=displayed.map(s=>({s,x:end===start?335:48+(new Date(s.at).getTime()-start)/(end-start)*574,y:180-s.left*1.6}));let segment=[];
-  function line() { if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#8eb4f5','stroke-width':2}));segment=[]; }
+  function line() { if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':2}));segment=[]; }
   points.forEach((p,index)=>{if(index && p.s.reset_at!==points[index-1].s.reset_at)line();segment.push(p);});line();
-  for(const p of points) { const label=timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 리셋 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,fill:'#8eb4f5',tabindex:0,class:'dash-chart-point','aria-label':label});const title=svgElement('title',{});title.textContent=label;dot.append(title);svg.append(dot); }
+  for(const p of points) { const label=timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,fill:'#0f766e',tabindex:0,class:'dash-chart-point','aria-label':label});const title=svgElement('title',{});title.textContent=label;dot.append(title);svg.append(dot); }
   chart.append(svg);const labels=document.createElement('div');labels.className='dash-chart-labels';labels.append(textNode('span',timeLabel(samples[0].at)),textNode('span',timeLabel(samples[samples.length-1].at)));chart.append(labels);
  }
  const forecast=(historyData.forecasts || []).find(f=>f.agent===agent && f.window===windowName), box=$('forecast-state');box.replaceChildren();box.classList.remove('risk');
