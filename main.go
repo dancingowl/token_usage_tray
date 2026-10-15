@@ -505,7 +505,7 @@ func onReady() {
 			systray.SetClickTooltip("표시할 에이전트가 없습니다.\n아래 설정 버튼에서 표시할 에이전트를 선택해 주세요.")
 		} else {
 			systray.SetTooltip(tooltip(&shown))
-			systray.SetClickTooltip("아이콘 기준: " + displayWindowLabel(settings.DisplayWindow) + "\n\n" + clickSummary(&shown))
+			systray.SetClickTooltipRows(clickSummaryRows(&shown))
 		}
 		for _, option := range []struct {
 			item  *systray.MenuItem

@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"fyne.io/systray"
 )
 
-// 클릭 팝업은 셸의 짧은 hover 툴팁과 달리 각 숫자의 뜻을 모두 적는다.
-func clickSummary(s *State) string { return clickSummaryAt(s, time.Now()) }
+// Keep each quota's value separate so native rendering can emphasize it without parsing text.
+func clickSummaryRows(s *State) []systray.ClickTooltipRow {
+	return clickSummaryRowsAt(s, time.Now())
+}
 
-func clickSummaryAt(s *State, now time.Time) string {
-	var sections []string
+func clickSummaryRowsAt(s *State, now time.Time) []systray.ClickTooltipRow {
+	var rows []systray.ClickTooltipRow
 	for _, agent := range []struct {
 		name string
 		u    AgentUsage
@@ -18,57 +22,69 @@ func clickSummaryAt(s *State, now time.Time) string {
 		if !agent.u.Available {
 			continue
 		}
-		lines := []string{agent.name}
+		start := len(rows)
+		appendWindow := func(label string, w Window) {
+			value := "확인 중"
+			if w.Left >= 0 {
+				value = fmt.Sprintf("%d%% 남음", w.Left)
+			}
+			detail := clickResetDetail(w, now)
+			if agent.u.Src != "" && agent.u.Src != "live" && agent.u.Src != "api" {
+				status := "기록"
+				if agent.u.Src == "cache" {
+					status = "캐시"
+				}
+				if agent.u.AgeMin >= 0 {
+					status += fmt.Sprintf(" %d분 전", agent.u.AgeMin)
+				}
+				detail += " · " + status
+			}
+			rows = append(rows, systray.ClickTooltipRow{
+				Label: agent.name + " · " + strings.Join(strings.Fields(label), " ") + " 한도",
+				Value: value, Detail: detail, Remaining: w.Left,
+			})
+		}
 		if agent.name == "Antigravity" && len(agent.u.Models) > 0 {
 			for _, w := range agent.u.Models {
-				lines = append(lines, clickWindowLines(w.Label, w, now)...)
+				appendWindow(w.Label, w)
 			}
 		} else {
 			if agent.u.Short.Left >= 0 || agent.u.Short.ResetAt > 0 {
-				lines = append(lines, clickWindowLines(windowName(agent.u.Short, "5시간"), agent.u.Short, now)...)
-				lines = append(lines, "")
+				appendWindow(windowName(agent.u.Short, "5시간"), agent.u.Short)
 			}
-			lines = append(lines, clickWindowLines(windowName(agent.u.Week, "주간"), agent.u.Week, now)...)
+			appendWindow(windowName(agent.u.Week, "주간"), agent.u.Week)
 		}
-		if agent.u.Limit != "" {
-			lines = append(lines, "사용 한도에 도달했습니다")
-		}
-		if agent.u.Src != "" && agent.u.Src != "live" && agent.u.Src != "api" {
-			line := "출처: " + agent.u.Src
-			if agent.u.AgeMin >= 0 {
-				line += fmt.Sprintf(" (%d분 전 기록)", agent.u.AgeMin)
+		if agent.u.Limit != "" && len(rows) > start {
+			matched := false
+			for i := start; i < len(rows); i++ {
+				if rows[i].Remaining == 0 {
+					rows[i].Detail += " · 한도 도달"
+					matched = true
+				}
 			}
-			lines = append(lines, line)
+			if !matched {
+				// A service-wide limit does not identify a particular quota.
+				rows[start].Detail += " · " + agent.name + " 이용 제한"
+			}
 		}
-		sections = append(sections, strings.Join(lines, "\n"))
 	}
-	if len(sections) == 0 {
-		return "사용량을 확인하고 있습니다"
-	}
-	return strings.Join(sections, "\n\n")
+	return rows
 }
 
-func clickWindowLines(label string, w Window, now time.Time) []string {
-	value := "확인할 수 없음"
-	if w.Left >= 0 {
-		value = fmt.Sprintf("%d%% 남음", w.Left)
-	}
-	lines := []string{label + " 한도: " + value}
+func clickResetDetail(w Window, now time.Time) string {
 	if w.ResetAt <= 0 {
-		return append(lines, "초기화: 시각 정보 없음")
+		return "초기화 시각 확인 중"
 	}
 	reset := time.Unix(w.ResetAt, 0).In(now.Location())
-	date := fmt.Sprintf("%d월 %d일 (%s) %s", int(reset.Month()), reset.Day(), weekdayKo[int(reset.Weekday())], reset.Format("15:04"))
+	date := fmt.Sprintf("%d/%d(%s) %s", int(reset.Month()), reset.Day(), weekdayKo[int(reset.Weekday())], reset.Format("15:04"))
 	if reset.Year() != now.Year() {
-		date = fmt.Sprintf("%d년 %s", reset.Year(), date)
+		date = fmt.Sprintf("%d/%s", reset.Year(), date)
 	}
-	lines = append(lines, "초기화: "+date)
-	d := reset.Sub(now)
-	if d <= 0 {
-		return append(lines, "초기화 시각 경과 · 갱신 대기")
+	if !reset.After(now) {
+		return date + " 초기화 · 시각 경과, 갱신 대기"
 	}
-	// 분 단위 올림으로 곧 초기화될 값도 '0분'으로 보이지 않게 한다.
-	minutes := int((d + time.Minute - 1) / time.Minute)
+	// Round up to minutes so an imminent reset never reads as zero minutes.
+	minutes := int((reset.Sub(now) + time.Minute - 1) / time.Minute)
 	days, hours, mins := minutes/(24*60), minutes/60%24, minutes%60
 	var remaining []string
 	if days > 0 {
@@ -80,5 +96,5 @@ func clickWindowLines(label string, w Window, now time.Time) []string {
 	if days == 0 && mins > 0 {
 		remaining = append(remaining, fmt.Sprintf("%d분", mins))
 	}
-	return append(lines, "초기화까지: "+strings.Join(remaining, " "))
+	return date + " 초기화 · " + strings.Join(remaining, " ") + " 후"
 }

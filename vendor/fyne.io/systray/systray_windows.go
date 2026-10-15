@@ -236,6 +236,7 @@ type winTray struct {
 	wcex      *wndClassEx
 	// Click text is separate from the Shell hover tooltip, under muNID.
 	clickText clickTooltipBuffer
+	clickRows []ClickTooltipRow
 
 	wmSystrayMessage,
 	wmTaskbarCreated uint32

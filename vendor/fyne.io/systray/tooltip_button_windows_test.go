@@ -41,6 +41,9 @@ func TestNativeClickCardRefreshCancelsPress(t *testing.T) {
 	if err := tray.setClickTooltip("갱신된 사용량 요약"); err != nil {
 		t.Fatal(err)
 	}
+	if err := tray.setClickTooltipRows([]ClickTooltipRow{{"Codex · 5시간 한도", "0% 남음", "초기화: 2026년 10월 15일 · 2시간 뒤", 0}}); err != nil {
+		t.Fatal(err)
+	}
 	tip, err := tray.newClickTooltip()
 	if err != nil {
 		t.Fatal(err)

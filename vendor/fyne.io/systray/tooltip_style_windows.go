@@ -5,7 +5,6 @@ package systray
 import (
 	"fmt"
 	"log"
-	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -18,7 +17,6 @@ var (
 )
 
 const (
-	clickTipTitle      = "사용량 요약"
 	clickTipBackground = 0x00fdfcfc // COLORREF for #FCFCFD.
 	clickTipTextColor  = 0x00382920 // COLORREF for #202938.
 	ttmSetTitleW       = 0x0400 + 33
@@ -47,9 +45,13 @@ func (tip *trackingTooltip) configureCardStyle() {
 }
 
 func clickTooltipFont(dpi uintptr) tooltipLogFont {
+	return clickCardFont(dpi, 11, 400)
+}
+
+func clickCardFont(dpi uintptr, points, weight int32) tooltipLogFont {
 	font := tooltipLogFont{
-		Height:  -int32((11*dpi + 36) / 72), // Segoe UI 11 pt, rounded to pixels.
-		Weight:  400,
+		Height:  -int32((uintptr(points)*dpi + 36) / 72),
+		Weight:  weight,
 		Quality: 5, // CLEARTYPE_QUALITY; normal GDI font linking covers Korean.
 	}
 	name, _ := windows.UTF16FromString("Segoe UI")
@@ -61,12 +63,21 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 	if tip.font != 0 && tip.fontDPI == dpi {
 		return nil
 	}
-	font := clickTooltipFont(dpi)
-	handle, _, err := pCreateFontIndirect.Call(uintptr(unsafe.Pointer(&font)))
-	if handle == 0 {
-		return fmt.Errorf("create Segoe UI tooltip font: %w", err)
+	var handles [3]windows.Handle
+	for i, font := range []tooltipLogFont{clickTooltipFont(dpi), clickCardFont(dpi, 14, 600), clickCardFont(dpi, 10, 400)} {
+		handle, _, err := pCreateFontIndirect.Call(uintptr(unsafe.Pointer(&font)))
+		if handle == 0 {
+			for _, allocated := range handles {
+				if allocated != 0 {
+					pDeleteObject.Call(uintptr(allocated))
+				}
+			}
+			return fmt.Errorf("create Segoe UI card font: %w", err)
+		}
+		handles[i] = windows.Handle(handle)
 	}
-	oldFont := tip.font
+	oldFonts := [3]windows.Handle{tip.font, tip.valueFont, tip.detailFont}
+	handle := uintptr(handles[0])
 	// The control does not own the supplied HFONT. Replace before deleting the
 	// previous font, and release the last font only after destroying the HWND.
 	pSendMessage.Call(uintptr(tip.window), 0x0030, handle, 0) // WM_SETFONT; still hidden.
@@ -75,27 +86,25 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 			pSendMessage.Call(uintptr(button), 0x0030, handle, 1)
 		}
 	}
-	tip.font, tip.fontDPI = windows.Handle(handle), dpi
-	if oldFont != 0 {
-		pDeleteObject.Call(uintptr(oldFont))
+	tip.font, tip.valueFont, tip.detailFont, tip.fontDPI = handles[0], handles[1], handles[2], dpi
+	for _, oldFont := range oldFonts {
+		if oldFont != 0 {
+			pDeleteObject.Call(uintptr(oldFont))
+		}
 	}
-	padding := int32(12 * dpi / 96)
+	padding := int32(14 * dpi / 96)
 	margin := tooltipRect{padding, padding, padding, padding + int32(48*dpi/96)}
 	pSendMessage.Call(uintptr(tip.window), ttmSetMargin, 0, uintptr(unsafe.Pointer(&margin)))
-	title, _ := windows.UTF16PtrFromString(clickTipTitle)
-	// Native title rendering supplies the bold heading above the body; the
-	// small blue information glyph provides a restrained color accent.
-	result, _, _ := pSendMessage.Call(uintptr(tip.window), ttmSetTitleW, 1, uintptr(unsafe.Pointer(title))) // TTI_INFO
-	runtime.KeepAlive(title)
-	if result == 0 {
-		return fmt.Errorf("set tooltip heading")
-	}
+	// Clear both the title and its native information glyph for every mode.
+	pSendMessage.Call(uintptr(tip.window), ttmSetTitleW, 0, 0)
 	return nil
 }
 
 func (tip *trackingTooltip) releaseCardFont() {
-	if tip.font != 0 {
-		pDeleteObject.Call(uintptr(tip.font))
-		tip.font, tip.fontDPI = 0, 0
+	for _, font := range [3]windows.Handle{tip.font, tip.valueFont, tip.detailFont} {
+		if font != 0 {
+			pDeleteObject.Call(uintptr(font))
+		}
 	}
+	tip.font, tip.valueFont, tip.detailFont, tip.fontDPI = 0, 0, 0, 0
 }

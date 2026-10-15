@@ -102,6 +102,18 @@ func clickCardSubclassProc(hwnd uintptr, message uint32, wParam, lParam, subclas
 		}
 	}
 	switch message {
+	case 0x000f: // WM_PAINT
+		if hwnd == uintptr(tip.window) && len(tip.rows) != 0 {
+			tip.paintRows()
+			return 0
+		}
+	case 0x0318: // WM_PRINTCLIENT, also used by offscreen native render tests.
+		if hwnd == uintptr(tip.window) && len(tip.rows) != 0 && wParam != 0 {
+			var client tooltipRect
+			pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&client)))
+			tip.drawRows(wParam, client)
+			return 0
+		}
 	case 0x0082: // WM_NCDESTROY, including partial construction failure.
 		pRemoveWindowSubclass.Call(hwnd, clickCardSubclass, subclassID)
 		clickCardWindows.Delete(windows.Handle(hwnd))

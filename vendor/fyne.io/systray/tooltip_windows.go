@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"slices"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -59,13 +61,49 @@ func (t *winTray) setClickTooltip(text string) error {
 		buffer[len(buffer)-2] = 0
 	}
 	t.muNID.Lock()
-	changed := t.clickText != buffer
+	changed := t.clickText != buffer || len(t.clickRows) != 0
 	t.clickText = buffer
+	t.clickRows = nil
 	t.muNID.Unlock()
 	if changed && t.isReady() {
 		pPostMessage.Call(uintptr(t.window), wmClickSummaryChanged, 0, 0)
 	}
 	return nil
+}
+
+// SetClickTooltipRows replaces the structured Windows click card. The slice is
+// copied. Empty rows restore the plain SetClickTooltip / hover fallback.
+func SetClickTooltipRows(rows []ClickTooltipRow) {
+	if err := wt.setClickTooltipRows(rows); err != nil {
+		log.Printf("systray error: unable to set click rows: %s", err)
+	}
+}
+
+func (t *winTray) setClickTooltipRows(rows []ClickTooltipRow) error {
+	for _, row := range rows {
+		if strings.ContainsRune(row.Label+row.Value+row.Detail, 0) {
+			return fmt.Errorf("click row contains NUL")
+		}
+	}
+	t.muNID.Lock()
+	changed := !slices.Equal(t.clickRows, rows)
+	t.clickRows = slices.Clone(rows)
+	t.muNID.Unlock()
+	if changed && t.isReady() {
+		pPostMessage.Call(uintptr(t.window), wmClickSummaryChanged, 0, 0)
+	}
+	return nil
+}
+
+func (t *winTray) clickTooltipSnapshot() (clickTooltipBuffer, []ClickTooltipRow) {
+	t.muNID.RLock()
+	defer t.muNID.RUnlock()
+	text := t.clickText
+	if text[0] == 0 && t.nid != nil {
+		copy(text[:], t.nid.Tip[:])
+	}
+	text[len(text)-1] = 0
+	return text, slices.Clone(t.clickRows)
 }
 
 func (t *winTray) clickTooltipText() clickTooltipBuffer {
@@ -95,18 +133,22 @@ type tooltipToolInfo struct {
 }
 
 type trackingTooltip struct {
-	window    windows.Handle
-	tool      tooltipToolInfo
-	text      clickTooltipBuffer
-	pinner    runtime.Pinner
-	visible   bool
-	font      windows.Handle
-	fontDPI   uintptr
-	buttons   [len(clickCardActions)]windows.Handle
-	hovered   windows.Handle
-	pressed   windows.Handle
-	dismissAt time.Time
-	anchor    point
+	window     windows.Handle
+	tool       tooltipToolInfo
+	text       clickTooltipBuffer
+	pinner     runtime.Pinner
+	visible    bool
+	font       windows.Handle
+	fontDPI    uintptr
+	valueFont  windows.Handle
+	detailFont windows.Handle
+	rows       []ClickTooltipRow
+	rowLayout  clickRowsLayout
+	buttons    [len(clickCardActions)]windows.Handle
+	hovered    windows.Handle
+	pressed    windows.Handle
+	dismissAt  time.Time
+	anchor     point
 }
 
 // All state and Win32 operations below belong to wndProc's OS thread.
@@ -235,7 +277,7 @@ func (t *winTray) newClickTooltip() (*trackingTooltip, error) {
 	)
 	hwnd, _, err := pCreateWindowEx.Call(wsExTopmost|wsExNoActivate,
 		uintptr(unsafe.Pointer(className)), 0,
-		wsPopup|ttsAlwaysTip|ttsNoPrefix|ttsNoAnimate|ttsNoFade,
+		wsPopup|0x02000000|ttsAlwaysTip|ttsNoPrefix|ttsNoAnimate|ttsNoFade, // WS_CLIPCHILDREN protects the action buttons.
 		0, 0, 0, 0, uintptr(t.window), 0, uintptr(t.instance), 0)
 	runtime.KeepAlive(className)
 	if hwnd == 0 {
@@ -325,8 +367,8 @@ func packTooltipPosition(p point) uintptr {
 }
 
 func (t *winTray) showClickTooltip(cursor point) error {
-	text := t.clickTooltipText()
-	if text[0] == 0 {
+	text, rows := t.clickTooltipSnapshot()
+	if text[0] == 0 && len(rows) == 0 {
 		return nil
 	}
 	work, err := clickTooltipWorkArea(cursor)
@@ -341,7 +383,13 @@ func (t *winTray) showClickTooltip(cursor point) error {
 	}
 	tip := t.clickTooltip
 	tip.anchor = cursor
+	tip.rows = rows
 	tip.text = text
+	if len(rows) != 0 {
+		// The native tracking control still owns activation and buttons; its
+		// body is painted from the structured snapshot by our subclass.
+		tip.text = clickTooltipBuffer{' '}
+	}
 	tip.sendTool(ttmUpdateTipTextW, 0)
 	// Move while hidden first so a per-monitor-aware control gets the DPI of
 	// the clicked monitor. GetDpiForWindow returns 96 for DPI-unaware processes.
@@ -370,6 +418,11 @@ func (t *winTray) showClickTooltip(cursor point) error {
 		return fmt.Errorf("measure tracking tooltip: %w", err)
 	}
 	width := rect.Right - rect.Left
+	height := rect.Bottom - rect.Top
+	if len(tip.rows) != 0 {
+		tip.rowLayout = tip.measureRows()
+		width, height = tip.rowLayout.width, tip.rowLayout.height
+	}
 	minWidth := int32(340 * dpi / 96)
 	if width < minWidth {
 		width = minWidth
@@ -377,10 +430,11 @@ func (t *winTray) showClickTooltip(cursor point) error {
 	if width > work.Right-work.Left {
 		width = work.Right - work.Left
 	}
-	position := clickTooltipPosition(cursor, width, rect.Bottom-rect.Top, gap, work)
-	pSetWindowPos.Call(uintptr(tip.window), 0, 0, 0, uintptr(width), uintptr(rect.Bottom-rect.Top), 0x0002|0x0004|0x0010|0x0200)
+	position := clickTooltipPosition(cursor, width, height, gap, work)
+	pSetWindowPos.Call(uintptr(tip.window), 0, 0, 0, uintptr(width), uintptr(height), 0x0002|0x0004|0x0010|0x0200)
 	tip.move(position)
 	tip.layoutActionButtons()
+	pInvalidateRect.Call(uintptr(tip.window), 0, 1)
 	tip.dismissAt = time.Now().Add(clickTipDuration * time.Millisecond)
 	if err := t.startClickDismissTimer(); err != nil {
 		t.hideClickTooltip()
