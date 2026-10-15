@@ -43,6 +43,25 @@ func TestDashboardPageRoutes(t *testing.T) {
 	}
 }
 
+func TestHistoryAPIReturnsSnapshotClockForEmptyPeriods(t *testing.T) {
+	t.Setenv("USAGE_TRAY_DATA_DIR", t.TempDir())
+	h := appHTTPHandler()
+	for _, days := range []string{"1", "7", "30"} {
+		before := time.Now()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, apiRequest("GET", "/api/history?days="+days, ""))
+		var response struct {
+			RangeEnd time.Time `json:"range_end"`
+		}
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &response) != nil {
+			t.Fatalf("history %s failed: %d", days, w.Code)
+		}
+		if response.RangeEnd.Before(before) || response.RangeEnd.After(time.Now()) {
+			t.Fatalf("history %s missing current snapshot clock: %v", days, response.RangeEnd)
+		}
+	}
+}
+
 func TestSettingsAPIValidationAndPersistence(t *testing.T) {
 	t.Setenv("USAGE_TRAY_DATA_DIR", t.TempDir())
 	h := appHTTPHandler()

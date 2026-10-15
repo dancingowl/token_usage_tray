@@ -32,7 +32,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .dash-fieldset{min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 14px}.dash-fieldset legend{color:var(--sub);padding:0 5px}
 .dash-rules{overflow:auto}.dash-rules th,.dash-rules td{padding:8px 9px;white-space:nowrap}.dash-rules input[type=number]{width:80px}.dash-rules input[type=checkbox]{width:16px;height:16px;accent-color:#0f766e}
 details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
-.dash-history-chart{width:100%;height:230px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-labels{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--sub)}.dash-chart-point:focus{outline:none;stroke:#202938;stroke-width:3}
+.dash-history-chart{width:100%;height:250px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-point{fill:transparent;stroke:none}.dash-chart-point:focus{outline:none}
 .history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
 .dash-forecast{border-left:3px solid #0f766e;padding:10px 14px;background:#f2f8f6;border-radius:8px;font-size:13px}.dash-forecast.risk{border-color:var(--bad);background:#fff5f5}.dash-forecast p{margin:4px 0}.dash-release{color:#0f766e}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
 body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .cl{font-size:26px}
@@ -44,7 +44,7 @@ const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type=
 
 const dashboardHTML = `
 <div class="dashboard">
- <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>시간 구간마다 마지막으로 관측한 잔량을 표시합니다. 원본 기록은 보존하며, 초기화 전후와 기록이 없는 구간은 선으로 잇지 않습니다.</p><p>호버·터치 또는 탭 키로 구간의 마지막 관측 시각과 잔량을 확인합니다. Esc 키로 닫습니다.</p><p>소진 예상은 원본 기록의 최근 소비 속도에 따른 추정입니다.</p></div></details></div>
+ <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>가로축은 선택한 최근 1일·7일·30일 전체입니다. 각각 30분·4시간·1일 구간의 마지막 관측 잔량을 표시합니다. 기록이 없는 시간은 빈 공간으로 남깁니다.</p><p>원본 기록은 보존하며, 초기화 전후와 빈 구간은 선으로 잇지 않습니다. 호버·터치 또는 탭 키로 선택한 지점만 강조합니다. Esc 키로 닫습니다.</p><p>소진 예상은 원본 기록의 최근 소비 속도에 따른 추정입니다.</p></div></details></div>
   <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">한도<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
   <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div>
@@ -203,6 +203,10 @@ function historyInterval(span,target=48) {
  const steps=[1,2,5,10,15,30,60,120,240,360,720,1440,2880,10080,20160,43200].map(minutes=>minutes*60000);
  return steps.find(step=>step>=span/target) || steps[steps.length-1];
 }
+function historyRange(days,end) {
+ const duration=([1,7,30].includes(Number(days))?Number(days):7)*86400000;
+ return {start:end-duration,end,interval:historyInterval(duration)};
+}
 function historyCycleChanged(a,b) {return a.reset_at!==b.reset_at || a.window_seconds!==b.window_seconds;}
 function historyBins(samples,interval) {
  const bins=[];let previous=null,segment=0;
@@ -222,10 +226,10 @@ function historyShortDate(ms,includeDate=true) {
  const d=new Date(ms),clock=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
  return (includeDate?(d.getMonth()+1)+'/'+d.getDate()+' ':'')+clock;
 }
-function attachHistoryDetails(chart,svg,points,dots) {
+function attachHistoryDetails(chart,svg,points,dots,range) {
  const tooltip=textNode('div','','history-tooltip');tooltip.id='history-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;chart.append(tooltip);
  const guide=svgElement('line',{y1:20,y2:180,stroke:'#80b5a9','stroke-dasharray':'4 4','pointer-events':'none'});
- const marker=svgElement('circle',{r:6,fill:'#fff',stroke:'#0f766e','stroke-width':3,'pointer-events':'none'});
+ const marker=svgElement('circle',{r:5,fill:'#fff',stroke:'#0f766e','stroke-width':2,'pointer-events':'none',class:'history-selected-point'});
  svg.append(guide,marker);
  let focused=null;
  function hide(){tooltip.hidden=true;guide.style.display='none';marker.style.display='none';}
@@ -244,8 +248,11 @@ function attachHistoryDetails(chart,svg,points,dots) {
  function inspect(event){
   const matrix=svg.getScreenCTM();if(!matrix)return;
   const pos=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
-  // Inspect the same last-in-bin observation represented by the line and keyboard dots.
-  const nearest=points.reduce((best,p)=>Math.abs(p.x-pos.x)<Math.abs(best.x-pos.x)?p:best,points[0]);
+  if(pos.x<48 || pos.x>range.width-18 || pos.y<20 || pos.y>180){hide();return;}
+  const at=range.start+(pos.x-48)/(range.width-66)*(range.end-range.start),bucket=Math.floor(at/range.interval);
+  const candidates=points.filter(p=>p.bucket===bucket);
+  if(!candidates.length){hide();return;}
+  const nearest=candidates.reduce((best,p)=>Math.abs(p.x-pos.x)<Math.abs(best.x-pos.x)?p:best,candidates[0]);
   show(nearest);
  }
  svg.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')inspect(event);});
@@ -260,30 +267,34 @@ function attachHistoryDetails(chart,svg,points,dots) {
 function drawHistory() {
  if(!historyData)return;
  const agent=$('history-agent').value, windowName=$('history-window').value;
- const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && !isNaN(new Date(s.at))).sort((a,b)=>new Date(a.at)-new Date(b.at));
+ const {start,end,interval}=historyRange(historyData.displayDays,historyData.rangeEnd);
+ const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && new Date(s.at).getTime()>=start && new Date(s.at).getTime()<=end).sort((a,b)=>new Date(a.at)-new Date(b.at));
  const chart=$('history-chart'), focusedAt=chart.contains(document.activeElement)?document.activeElement.dataset.at:null;
  dismissHistoryDetails();dismissHistoryDetails=()=>{};chart.replaceChildren();
  if(samples.length<2)message('history-message',samples.length===1?'기록이 1개입니다. 추이를 보려면 2개 이상의 기록이 필요합니다.':'이 기간에 수집한 기록이 없습니다. 앱이 실행되는 동안 기록이 쌓입니다.');
  else message('history-message',samples.length+'개 기록 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
- if(samples.length) {
+ {
   const width=Math.max(240,chart.clientWidth), plotWidth=width-66;
-  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 210',class:'dash-history-chart',role:'group','aria-label':names[agent]+' 잔여 한도 이력'}); const start=new Date(samples[0].at).getTime(), end=new Date(samples[samples.length-1].at).getTime();
+  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 230',class:'dash-history-chart',role:'group','aria-label':names[agent]+' 최근 '+historyData.displayDays+'일 잔여 한도 이력','data-start':start,'data-end':end,'data-interval':interval});
   for(const pct of [0,25,50,75,100]) { const y=180-pct*1.6;svg.append(svgElement('line',{x1:48,y1:y,x2:width-18,y2:y,stroke:'#dce3eb','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#626b78','font-size':12});label.textContent=pct+'%';svg.append(label); }
-  const interval=historyInterval(end-start),bins=historyBins(samples,interval);
+  const bins=historyBins(samples,interval);
   if(samples.length>1)message('history-message',historyIntervalLabel(interval)+' 간격 · 구간별 마지막 잔량 · '+bins.length+'개 표시 / '+samples.length+'개 기록');
   const points=bins.map(bin=>({...bin,x:end===start?48+plotWidth/2:48+(new Date(bin.s.at).getTime()-start)/(end-start)*plotWidth,y:180-bin.s.left*1.6})), dots=[];let segment=[];
-  function line() { if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':2}));segment=[]; }
+  function line() { if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':1.5,'vector-effect':'non-scaling-stroke'}));segment=[]; }
   points.forEach((p,index)=>{if(index && (p.segment!==points[index-1].segment || p.bucket-points[index-1].bucket>1))line();segment.push(p);});line();
-  for(const p of points) { const label='구간 마지막 관측 · '+timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:2.5,fill:'#0f766e',tabindex:0,class:'dash-chart-point','aria-label':label,'data-at':p.s.at});svg.append(dot);dots.push({dot,point:p}); }
-  const tickStep=historyInterval(end-start,Math.max(2,Math.min(6,Math.floor(plotWidth/100))));
+  for(const p of points) { const label='구간 마지막 관측 · '+timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,tabindex:0,class:'dash-chart-point','aria-label':label,'data-at':p.s.at});svg.append(dot);dots.push({dot,point:p}); }
+  const tickCount=Math.max(2,Math.min(6,Math.floor(plotWidth/90)));
   const acrossDates=new Date(start).toDateString()!==new Date(end).toDateString();
-  for(let at=Math.ceil(start/tickStep)*tickStep;at<=end && end>start;at+=tickStep){
-   const x=48+(at-start)/(end-start)*plotWidth,d=new Date(at);
-   const label=end-start>=2*86400000?(d.getMonth()+1)+'/'+d.getDate():historyShortDate(at,acrossDates);
-   const tick=svgElement('text',{x,y:203,fill:'#626b78','font-size':11,'text-anchor':x>width-60?'end':x<60?'start':'middle'});tick.textContent=label;svg.append(tick);
+  for(let i=0;i<=tickCount;i++){
+   const at=start+(end-start)*i/tickCount,x=48+plotWidth*i/tickCount,d=new Date(at);
+   const tick=svgElement('text',{x,y:202,fill:'#626b78','font-size':11,'text-anchor':i===0?'start':i===tickCount?'end':'middle',class:'history-tick'});
+   const date=svgElement('tspan',{x});date.textContent=(d.getMonth()+1)+'/'+d.getDate();tick.append(date);
+   if(historyData.displayDays===1){const clock=svgElement('tspan',{x,dy:15});clock.textContent=historyShortDate(at,false);tick.append(clock);}
+   svg.append(tick);
   }
-  chart.append(svg);chart.append(textNode('p',historyShortDate(start)+'–'+historyShortDate(end,acrossDates)+' · 최근 '+$('history-days').value+'일 중 기록된 구간','history-range'));
-  attachHistoryDetails(chart,svg,points,dots);
+  if(!points.length){const empty=svgElement('text',{x:48+plotWidth/2,y:102,'text-anchor':'middle',fill:'#626b78','font-size':12});empty.textContent='기록 없음';svg.append(empty);}
+  chart.append(svg);chart.append(textNode('p',historyShortDate(start)+'–'+historyShortDate(end,acrossDates)+' · 최근 '+historyData.displayDays+'일 전체','history-range'));
+  if(points.length)attachHistoryDetails(chart,svg,points,dots,{start,end,interval,width});
   if(focusedAt){const target=dots.reduce((best,item)=>Math.abs(new Date(item.point.s.at)-new Date(focusedAt))<Math.abs(new Date(best.point.s.at)-new Date(focusedAt))?item:best,dots[0]);if(target)target.dot.focus({preventScroll:true});}
  }
  const forecast=(historyData.forecasts || []).find(f=>f.agent===agent && f.window===windowName), box=$('forecast-state');box.replaceChildren();box.classList.remove('risk');
@@ -293,9 +304,11 @@ function drawHistory() {
  if(forecast.estimated_exhaustion)box.append(textNode('p','예상 소진: '+timeLabel(forecast.estimated_exhaustion)+(forecast.exhausts_before_reset?' · 리셋 전에 소진될 가능성이 있습니다.':' · 현재 속도에서는 리셋 전 소진 위험이 낮습니다.')));
 }
 async function loadHistory() {
- const request=++historyRequest;
+ const request=++historyRequest,days=Number($('history-days').value);
+ if(historyData && historyData.displayDays!==days){historyData=null;dismissHistoryDetails();$('history-chart').replaceChildren();message('history-message','기록을 불러오고 있습니다.');$('forecast-state').replaceChildren(textNode('p','예측 정보를 불러오고 있습니다.'));}
  try {
-  const data=await api('/api/history?days='+$('history-days').value);if(request!==historyRequest)return;historyData=data;
+  const data=await api('/api/history?days='+days);if(request!==historyRequest)return;
+  const serverEnd=Date.parse(data.range_end);historyData={...data,displayDays:days,rangeEnd:Number.isFinite(serverEnd)?serverEnd:Date.now()};
   if(!historySelectionInitialized) {
    historySelectionInitialized=true;
    if(!historySelectionTouched) {
@@ -305,7 +318,7 @@ async function loadHistory() {
   }
   drawHistory();
  }
- catch(e) { if(request===historyRequest)message('history-message','기록을 불러오지 못했습니다. 표시된 그래프는 직전 조회 결과입니다.',true); }
+ catch(e) { if(request===historyRequest)message('history-message',historyData?'기록을 불러오지 못했습니다. 표시된 그래프는 직전 조회 결과입니다.':'기록을 불러오지 못했습니다. 기간을 다시 선택해 주세요.',true); }
 }
 $('history-agent').addEventListener('change',()=>{historySelectionTouched=true;drawHistory();});$('history-window').addEventListener('change',()=>{historySelectionTouched=true;drawHistory();});$('history-days').addEventListener('change',()=>{historySelectionTouched=true;loadHistory();});
 let chartResizeFrame=0;

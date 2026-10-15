@@ -176,7 +176,8 @@ func appHTTPHandler() http.Handler {
 			apiError(w, 400, "기록 범위는 1, 7, 30일입니다")
 			return
 		}
-		samples, forecasts, err := usageHistorySnapshot(time.Now(), days)
+		rangeEnd := time.Now()
+		samples, forecasts, err := usageHistorySnapshot(rangeEnd, days)
 		if err != nil {
 			logf("history read: %v", err)
 		}
@@ -186,7 +187,7 @@ func appHTTPHandler() http.Handler {
 		if forecasts == nil {
 			forecasts = []usageForecast{}
 		}
-		writeJSON(w, map[string]any{"samples": samples, "forecasts": forecasts})
+		writeJSON(w, map[string]any{"samples": samples, "forecasts": forecasts, "range_end": rangeEnd})
 	})
 	mux.HandleFunc("/api/startup", func(w http.ResponseWriter, r *http.Request) {
 		startupMu.Lock()

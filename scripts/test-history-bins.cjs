@@ -10,12 +10,19 @@ const end = source.indexOf('function attachHistoryDetails(', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
 vm.runInContext(source.slice(start, end), context);
-const { historyInterval, historyBins } = context;
+const { historyInterval, historyBins, historyRange } = context;
 const minute = 60000, hour = 60 * minute, day = 24 * hour;
 for (const [span, expected] of [[0, minute], [5 * hour, 10 * minute], [24 * hour, 30 * minute], [7 * day, 4 * hour], [30 * day, day]]) {
  assert.equal(historyInterval(span), expected);
 }
 assert.ok(30 * day / historyInterval(30 * day, 2) <= 3, 'long-range mobile tick labels must stay sparse');
+const rangeEnd = Date.UTC(2026, 9, 15, 15, 30);
+for (const [days, interval] of [[1, 30 * minute], [7, 4 * hour], [30, day]]) {
+ const range = historyRange(days, rangeEnd);
+ assert.equal(range.end, rangeEnd);
+ assert.equal(range.start, rangeEnd - days * day);
+ assert.equal(range.interval, interval);
+}
 const at = Date.UTC(2026, 9, 15, 10);
 const sample = (offset, left, reset = 100, window = 3600) => Object.freeze({at: new Date(at + offset).toISOString(), left, reset_at: reset, window_seconds: window, source: 'live'});
 const input = Object.freeze([sample(0, 80), sample(2 * minute, 75), sample(9 * minute, 0), sample(10 * minute, 62), sample(19 * minute, 60)]);
