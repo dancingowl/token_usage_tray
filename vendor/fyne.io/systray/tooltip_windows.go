@@ -81,7 +81,7 @@ func SetClickTooltipRows(rows []ClickTooltipRow) {
 
 func (t *winTray) setClickTooltipRows(rows []ClickTooltipRow) error {
 	for _, row := range rows {
-		if strings.ContainsRune(row.Label+row.Value+row.Detail, 0) {
+		if strings.ContainsRune(row.Label+row.Value+row.Detail+row.Countdown+row.ResetDate+row.Status, 0) {
 			return fmt.Errorf("click row contains NUL")
 		}
 	}
@@ -133,22 +133,23 @@ type tooltipToolInfo struct {
 }
 
 type trackingTooltip struct {
-	window     windows.Handle
-	tool       tooltipToolInfo
-	text       clickTooltipBuffer
-	pinner     runtime.Pinner
-	visible    bool
-	font       windows.Handle
-	fontDPI    uintptr
-	valueFont  windows.Handle
-	detailFont windows.Handle
-	rows       []ClickTooltipRow
-	rowLayout  clickRowsLayout
-	buttons    [len(clickCardActions)]windows.Handle
-	hovered    windows.Handle
-	pressed    windows.Handle
-	dismissAt  time.Time
-	anchor     point
+	window        windows.Handle
+	tool          tooltipToolInfo
+	text          clickTooltipBuffer
+	pinner        runtime.Pinner
+	visible       bool
+	font          windows.Handle
+	fontDPI       uintptr
+	valueFont     windows.Handle
+	detailFont    windows.Handle
+	countdownFont windows.Handle
+	rows          []ClickTooltipRow
+	rowLayout     clickRowsLayout
+	buttons       [len(clickCardActions)]windows.Handle
+	hovered       windows.Handle
+	pressed       windows.Handle
+	dismissAt     time.Time
+	anchor        point
 }
 
 // All state and Win32 operations below belong to wndProc's OS thread.

@@ -29,6 +29,7 @@ func clickSummaryRowsAt(s *State, now time.Time) []systray.ClickTooltipRow {
 				value = fmt.Sprintf("%d%% 남음", w.Left)
 			}
 			detail := clickResetDetail(w, now)
+			countdown, date, exception := clickResetColumns(w, now)
 			if agent.u.Src != "" && agent.u.Src != "live" && agent.u.Src != "api" {
 				status := "기록"
 				if agent.u.Src == "cache" {
@@ -38,10 +39,15 @@ func clickSummaryRowsAt(s *State, now time.Time) []systray.ClickTooltipRow {
 					status += fmt.Sprintf(" %d분 전", agent.u.AgeMin)
 				}
 				detail += " · " + status
+				if exception != "" {
+					exception += " · "
+				}
+				exception += status
 			}
 			rows = append(rows, systray.ClickTooltipRow{
 				Label: agent.name + " · " + strings.Join(strings.Fields(label), " ") + " 한도",
 				Value: value, Detail: detail, Remaining: w.Left,
+				Countdown: countdown, ResetDate: date, Status: exception,
 			})
 		}
 		if agent.name == "Antigravity" && len(agent.u.Models) > 0 {
@@ -59,29 +65,49 @@ func clickSummaryRowsAt(s *State, now time.Time) []systray.ClickTooltipRow {
 			for i := start; i < len(rows); i++ {
 				if rows[i].Remaining == 0 {
 					rows[i].Detail += " · 한도 도달"
+					appendClickStatus(&rows[i], "한도 도달")
 					matched = true
 				}
 			}
 			if !matched {
 				// A service-wide limit does not identify a particular quota.
 				rows[start].Detail += " · " + agent.name + " 이용 제한"
+				appendClickStatus(&rows[start], agent.name+" 이용 제한")
 			}
 		}
 	}
 	return rows
 }
 
+func appendClickStatus(row *systray.ClickTooltipRow, status string) {
+	if row.Status != "" {
+		row.Status += " · "
+	}
+	row.Status += status
+}
+
 func clickResetDetail(w Window, now time.Time) string {
+	countdown, date, status := clickResetColumns(w, now)
+	if date == "" {
+		return countdown
+	}
+	if status != "" {
+		return date + " 초기화 · 시각 경과, 갱신 대기"
+	}
+	return date + " 초기화 · " + strings.TrimSuffix(countdown, " 초기화")
+}
+
+func clickResetColumns(w Window, now time.Time) (countdown, date, status string) {
 	if w.ResetAt <= 0 {
-		return "초기화 시각 확인 중"
+		return "초기화 시각 확인 중", "", ""
 	}
 	reset := time.Unix(w.ResetAt, 0).In(now.Location())
-	date := fmt.Sprintf("%d/%d(%s) %s", int(reset.Month()), reset.Day(), weekdayKo[int(reset.Weekday())], reset.Format("15:04"))
+	date = fmt.Sprintf("%d/%d(%s) %s", int(reset.Month()), reset.Day(), weekdayKo[int(reset.Weekday())], reset.Format("15:04"))
 	if reset.Year() != now.Year() {
 		date = fmt.Sprintf("%d/%s", reset.Year(), date)
 	}
 	if !reset.After(now) {
-		return date + " 초기화 · 시각 경과, 갱신 대기"
+		return "초기화 갱신 대기", date, "초기화 시각 경과"
 	}
 	// Round up to minutes so an imminent reset never reads as zero minutes.
 	minutes := int((reset.Sub(now) + time.Minute - 1) / time.Minute)
@@ -96,5 +122,5 @@ func clickResetDetail(w Window, now time.Time) string {
 	if days == 0 && mins > 0 {
 		remaining = append(remaining, fmt.Sprintf("%d분", mins))
 	}
-	return date + " 초기화 · " + strings.Join(remaining, " ") + " 후"
+	return strings.Join(remaining, " ") + " 후 초기화", date, ""
 }

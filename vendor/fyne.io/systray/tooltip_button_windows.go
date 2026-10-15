@@ -54,33 +54,38 @@ type clickButtonPalette struct{ fill, border, text uintptr }
 
 func clickButtonColors(state uint32, hovered bool) clickButtonPalette {
 	if state&0x0004 != 0 { // ODS_DISABLED
-		return clickButtonPalette{0x00f8f6f5, 0x00eae5e1, 0x00afa39a}
+		return clickButtonPalette{clickTipBackground, clickTipBackground, 0x00afa39a}
 	}
 	if state&0x0001 != 0 { // ODS_SELECTED
-		return clickButtonPalette{0x00f0e5dd, 0x00b6a89a, clickTipTextColor}
+		return clickButtonPalette{0x00ece6e1, 0x00d6cec7, clickTipTextColor}
 	}
 	if hovered {
-		return clickButtonPalette{0x00f4ede8, 0x00c5b8aa, clickTipTextColor}
+		return clickButtonPalette{0x00f5f1ed, 0x00e5ddd7, clickTipTextColor}
 	}
-	// Neutral Fluent-style actions have equal weight. The popup is already
-	// a compact summary, so none of refresh/detail/settings needs promotion.
-	return clickButtonPalette{0x00f8f5f3, 0x00e5ddd7, clickTipTextColor}
+	// Ghost actions blend into the card until hover or press. Native button
+	// labels and semantics remain available to accessibility tools.
+	return clickButtonPalette{clickTipBackground, clickTipBackground, clickTipDetailColor}
 }
 
 func clickButtonBounds(client tooltipRect, dpi uintptr, index, count int) tooltipRect {
 	if dpi == 0 {
 		dpi = 96
 	}
-	padding, gap, height := int32(12*dpi/96), int32(8*dpi/96), int32(36*dpi/96)
-	available := client.Right - client.Left - 2*padding - int32(count-1)*gap
-	if available < int32(count) {
-		available = int32(count)
+	padding, gap, height := int32(16*dpi/96), int32(4*dpi/96), int32(30*dpi/96)
+	// Refresh anchors the left edge. Detail and settings form a compact group
+	// at the right, leaving flexible space in between rather than three tiles.
+	widths := [...]int32{int32(82 * dpi / 96), int32(84 * dpi / 96), int32(54 * dpi / 96)}
+	if count != len(widths) || index < 0 || index >= len(widths) {
+		return tooltipRect{}
 	}
-	// Divide the available span rather than a rounded width, giving the last
-	// button the remainder and preserving the same outer padding at all DPI.
-	left := client.Left + padding + available*int32(index)/int32(count) + gap*int32(index)
-	right := client.Left + padding + available*int32(index+1)/int32(count) + gap*int32(index)
-	return tooltipRect{left, client.Bottom - padding - height, right, client.Bottom - padding}
+	left := client.Left + padding
+	if index > 0 {
+		left = client.Right - padding - widths[2]
+		if index == 1 {
+			left -= gap + widths[1]
+		}
+	}
+	return tooltipRect{left, client.Bottom - padding - height, left + widths[index], client.Bottom - padding}
 }
 
 func (tip *trackingTooltip) drawActionButton(item *clickButtonDrawItem) bool {

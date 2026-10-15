@@ -20,7 +20,7 @@ func TestClickRowsSnapshotAndModeTransitions(t *testing.T) {
 	if err := tray.setClickTooltip("fallback"); err != nil {
 		t.Fatal(err)
 	}
-	rows := []ClickTooltipRow{{"Codex · 5시간 한도 😀", "0% 남음", "초기화: 2026년 10월 15일 18:00 · 2시간 뒤", 0}}
+	rows := []ClickTooltipRow{{Label: "Codex · 5시간 한도 😀", Value: "0% 남음", Detail: "초기화: 2026년 10월 15일 18:00 · 2시간 뒤", Remaining: 0}}
 	if err := tray.setClickTooltipRows(rows); err != nil {
 		t.Fatal(err)
 	}
@@ -34,8 +34,10 @@ func TestClickRowsSnapshotAndModeTransitions(t *testing.T) {
 	if next[0].Value != "0% 남음" {
 		t.Fatal("snapshot aliases tray state")
 	}
-	if err := tray.setClickTooltipRows([]ClickTooltipRow{{Label: "invalid\x00"}}); err == nil {
-		t.Fatal("NUL accepted")
+	for _, invalid := range []ClickTooltipRow{{Label: "invalid\x00"}, {Countdown: "invalid\x00"}, {ResetDate: "invalid\x00"}, {Status: "invalid\x00"}} {
+		if err := tray.setClickTooltipRows([]ClickTooltipRow{invalid}); err == nil {
+			t.Fatal("NUL accepted")
+		}
 	}
 	_, next = tray.clickTooltipSnapshot()
 	if len(next) != 1 || next[0].Value != "0% 남음" {
@@ -71,6 +73,23 @@ func TestClickRowNumericSeverity(t *testing.T) {
 	}
 }
 
+func TestClickRowResetGroup(t *testing.T) {
+	for _, tc := range []struct {
+		row         ClickTooltipRow
+		left, right string
+	}{
+		{ClickTooltipRow{Countdown: "6일 22시간 후 초기화", ResetDate: "10/22(목) 15:13"}, "6일 22시간 후 초기화", " · 10/22(목) 15:13"},
+		{ClickTooltipRow{Countdown: "초기화 정보 없음"}, "초기화 정보 없음", ""},
+		{ClickTooltipRow{ResetDate: "10/22(목) 15:13"}, "", "10/22(목) 15:13"},
+		{ClickTooltipRow{Detail: "기존 상세 정보"}, "기존 상세 정보", ""},
+	} {
+		left, right := clickRowSecondLine(tc.row)
+		if left != tc.left || right != tc.right {
+			t.Fatalf("reset group = %q, %q; want %q, %q", left, right, tc.left, tc.right)
+		}
+	}
+}
+
 func TestClickRowsConcurrentSnapshots(t *testing.T) {
 	tray := winTray{}
 	var workers sync.WaitGroup
@@ -79,7 +98,7 @@ func TestClickRowsConcurrentSnapshots(t *testing.T) {
 		go func(remaining int) {
 			defer workers.Done()
 			for j := 0; j < 100; j++ {
-				if err := tray.setClickTooltipRows([]ClickTooltipRow{{"서비스 · 한도", "남음", "초기화", remaining}}); err != nil {
+				if err := tray.setClickTooltipRows([]ClickTooltipRow{{Label: "서비스 · 한도", Value: "남음", Detail: "초기화", Remaining: remaining}}); err != nil {
 					t.Error(err)
 				}
 				_, snapshot := tray.clickTooltipSnapshot()
@@ -112,17 +131,17 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 	tray.clickTooltip = tip
 	defer tray.destroyClickTooltip()
 	tip.rows = []ClickTooltipRow{
-		{"Codex · 5시간 한도", "0% 남음", "10/15(목) 18:00 초기화 · 2시간 후", 0},
-		{"Codex · 주간 한도", "18% 남음", "10/20(화) 13:58 초기화 · 5일 3시간 후", 18},
-		{"Claude · 5시간 한도", "42% 남음", "10/15(목) 20:00 초기화 · 4시간 후", 42},
-		{"Claude · 주간 한도", "확인 중", "초기화 정보 없음", -1},
+		{Label: "Codex · 5시간 한도", Value: "0% 남음", Countdown: "2시간 후 초기화", ResetDate: "10/15(목) 18:00", Status: "캐시 12분 전 · 한도 도달", Remaining: 0},
+		{Label: "Codex · 주간 한도", Value: "18% 남음", Countdown: "5일 3시간 후 초기화", ResetDate: "10/20(화) 13:58", Remaining: 18},
+		{Label: "Claude · 5시간 한도", Value: "42% 남음", Detail: "10/15(목) 20:00 초기화 · 4시간 후", Remaining: 42},
+		{Label: "Claude · 주간 한도", Value: "확인 중", Detail: "초기화 정보 없음", Remaining: -1},
 	}
 	exStyle, _, _ := u32.NewProc("GetWindowLongW").Call(uintptr(tip.window), ^uintptr(19)) // GWL_EXSTYLE -20
 	if exStyle&0x08000000 == 0 {
 		t.Fatal("card lost WS_EX_NOACTIVATE")
 	}
 	for _, dpi := range []uintptr{96, 120, 144, 192, 96} {
-		oldFonts := []windows.Handle{tip.font, tip.valueFont, tip.detailFont}
+		oldFonts := []windows.Handle{tip.font, tip.valueFont, tip.detailFont, tip.countdownFont}
 		oldDPI := tip.fontDPI
 		if err := tip.scaleCardStyle(dpi); err != nil {
 			t.Fatal(err)
@@ -135,37 +154,42 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 				}
 			}
 		}
-		for i, font := range []windows.Handle{tip.font, tip.valueFont, tip.detailFont} {
+		for i, font := range []windows.Handle{tip.font, tip.valueFont, tip.detailFont, tip.countdownFont} {
 			var got tooltipLogFont
 			g32.NewProc("GetObjectW").Call(uintptr(font), unsafe.Sizeof(got), uintptr(unsafe.Pointer(&got)))
-			want := []tooltipLogFont{clickCardFont(dpi, 11, 400), clickCardFont(dpi, 14, 600), clickCardFont(dpi, 10, 400)}[i]
+			want := []tooltipLogFont{clickCardFont(dpi, 10, 400), clickCardFont(dpi, 18, 600), clickCardFont(dpi, 10, 400), clickCardFont(dpi, 10, 600)}[i]
 			if got != want {
 				t.Fatalf("DPI %d font %d differs", dpi, i)
 			}
 		}
 		tip.rowLayout = tip.measureRows()
 		layout := tip.rowLayout
-		if layout.width < int32(340*dpi/96) || layout.padding != int32((14*dpi+48)/96) || layout.gap != int32((12*dpi+48)/96) {
+		if layout.width < int32(360*dpi/96) || layout.padding != int32((16*dpi+48)/96) || layout.gap != int32((12*dpi+48)/96) {
 			t.Fatal("DPI geometry incorrect")
 		}
 		dc, _, _ := pGetDC.Call(uintptr(tip.window))
 		for _, row := range tip.rows {
 			label := clickMeasureText(dc, tip.font, row.Label)
 			value := clickMeasureText(dc, tip.valueFont, row.Value)
-			detail := clickMeasureText(dc, tip.detailFont, row.Detail)
-			if label.Right+value.Right+layout.gap+2*layout.padding+2 > layout.width || detail.Right+2*layout.padding+2 > layout.width {
+			left, right := clickRowSecondLine(row)
+			detail := clickMeasureText(dc, tip.rowCountdownFont(row), left)
+			date := clickMeasureText(dc, tip.detailFont, right)
+			status := clickMeasureText(dc, tip.detailFont, row.Status)
+			if label.Right+value.Right+layout.gap+2*layout.padding+2 > layout.width || detail.Right+date.Right+2*layout.padding+2 > layout.width || status.Right+2*layout.padding+2 > layout.width {
 				t.Fatal("long quota/date clips")
 			}
 		}
 		// Longer model labels and an explicit year also participate in width
 		// measurement, even though the normal preview uses the app's dates.
 		previewRows := tip.rows
-		tip.rows = []ClickTooltipRow{{"Claude · 주간 한도 (Sonnet)", "100% 남음", "2026/10/20(화) 13:58 초기화 · 5일 3시간 후", 100}}
+		tip.rows = []ClickTooltipRow{{Label: "Claude · 주간 한도 (Sonnet)", Value: "100% 남음", Countdown: "5일 3시간 후 초기화", ResetDate: "2027/10/20(수) 13:58", Status: "캐시 120분 전 · Claude 이용 제한", Remaining: 100}}
 		longLayout := tip.measureRows()
 		longLabel := clickMeasureText(dc, tip.font, tip.rows[0].Label)
 		longValue := clickMeasureText(dc, tip.valueFont, tip.rows[0].Value)
-		longDetail := clickMeasureText(dc, tip.detailFont, tip.rows[0].Detail)
-		if longLabel.Right+longValue.Right+longLayout.gap+2*longLayout.padding+2 > longLayout.width || longDetail.Right+2*longLayout.padding+2 > longLayout.width {
+		longDetail := clickMeasureText(dc, tip.countdownFont, tip.rows[0].Countdown)
+		longDate := clickMeasureText(dc, tip.detailFont, " · "+tip.rows[0].ResetDate)
+		longStatus := clickMeasureText(dc, tip.detailFont, tip.rows[0].Status)
+		if longLabel.Right+longValue.Right+longLayout.gap+2*longLayout.padding+2 > longLayout.width || longDetail.Right+longDate.Right+2*longLayout.padding+2 > longLayout.width || longStatus.Right+2*longLayout.padding+2 > longLayout.width {
 			t.Fatal("long model label or year clips")
 		}
 		tip.rows = previewRows
@@ -219,11 +243,11 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 	if err := windows.ReadProcessMemory(windows.CurrentProcess(), pixels, &bytes[0], uintptr(len(bytes)), &read); err != nil || read != uintptr(len(bytes)) {
 		t.Fatal("read DIB", err)
 	}
+	y0 := int(layout.padding)
 	for index, row := range tip.rows {
-		y0 := int(layout.padding) + index*int(layout.firstHeight+layout.detailHeight+layout.gap)
 		count := 0
 		for y := y0; y < y0+int(layout.firstHeight); y++ {
-			for x := width / 2; x < width-int(layout.padding); x++ {
+			for x := int(layout.padding); x < width/2; x++ {
 				o := (y*width + x) * 4
 				pixel := uintptr(bytes[o+2]) | uintptr(bytes[o+1])<<8 | uintptr(bytes[o])<<16
 				if pixel == clickRowValueColor(row.Remaining) {
@@ -234,6 +258,7 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 		if count == 0 {
 			t.Fatalf("row %d numeric value color absent from native pixels", index)
 		}
+		y0 += int(layout.rowHeight(row))
 	}
 	if path := os.Getenv("USAGE_TRAY_CARD_PREVIEW"); path != "" {
 		out := image.NewNRGBA(image.Rect(0, 0, width, height))
@@ -252,7 +277,7 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	fonts := []windows.Handle{tip.font, tip.valueFont, tip.detailFont}
+	fonts := []windows.Handle{tip.font, tip.valueFont, tip.detailFont, tip.countdownFont}
 	tray.destroyClickTooltip()
 	for _, font := range fonts {
 		var info tooltipLogFont

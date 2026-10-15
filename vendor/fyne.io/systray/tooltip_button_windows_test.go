@@ -41,7 +41,7 @@ func TestNativeClickCardRefreshCancelsPress(t *testing.T) {
 	if err := tray.setClickTooltip("갱신된 사용량 요약"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tray.setClickTooltipRows([]ClickTooltipRow{{"Codex · 5시간 한도", "0% 남음", "초기화: 2026년 10월 15일 · 2시간 뒤", 0}}); err != nil {
+	if err := tray.setClickTooltipRows([]ClickTooltipRow{{Label: "Codex · 5시간 한도", Value: "0% 남음", Detail: "초기화: 2026년 10월 15일 · 2시간 뒤", Remaining: 0}}); err != nil {
 		t.Fatal(err)
 	}
 	tip, err := tray.newClickTooltip()
@@ -114,17 +114,18 @@ func TestThreeClickActionsAndDPILayout(t *testing.T) {
 	}
 	for _, dpi := range []uintptr{96, 120, 144, 192} {
 		client := tooltipRect{0, 0, int32(340 * dpi / 96), int32(300 * dpi / 96)}
-		padding, gap := int32(12*dpi/96), int32(8*dpi/96)
-		previous := padding - gap
+		padding, gap := int32(16*dpi/96), int32(4*dpi/96)
+		refresh := clickButtonBounds(client, dpi, 0, len(clickCardActions))
+		detail := clickButtonBounds(client, dpi, 1, len(clickCardActions))
+		settings := clickButtonBounds(client, dpi, 2, len(clickCardActions))
+		if refresh.Left != padding || settings.Right != client.Right-padding || settings.Left-detail.Right != gap || detail.Left-refresh.Right <= gap {
+			t.Fatalf("DPI %d footer lost its left/right grouping", dpi)
+		}
 		for i := range clickCardActions {
 			bounds := clickButtonBounds(client, dpi, i, len(clickCardActions))
-			if bounds.Left-previous != gap || bounds.Bottom-bounds.Top != int32(36*dpi/96) || bounds.Right-bounds.Left < int32(90*dpi/96) {
-				t.Fatalf("DPI %d button %d has cramped/inconsistent bounds %+v", dpi, i, bounds)
+			if bounds.Bottom-bounds.Top != int32(30*dpi/96) || bounds.Bottom != client.Bottom-padding {
+				t.Fatalf("DPI %d button %d has inconsistent bounds %+v", dpi, i, bounds)
 			}
-			previous = bounds.Right
-		}
-		if previous != client.Right-padding {
-			t.Fatal("last button does not preserve outer padding")
 		}
 	}
 }

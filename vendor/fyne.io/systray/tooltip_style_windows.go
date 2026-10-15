@@ -17,10 +17,11 @@ var (
 )
 
 const (
-	clickTipBackground = 0x00fdfcfc // COLORREF for #FCFCFD.
-	clickTipTextColor  = 0x00382920 // COLORREF for #202938.
-	ttmSetTitleW       = 0x0400 + 33
-	ttmSetMargin       = 0x0400 + 26
+	clickTipBackground  = 0x00fdfcfc // COLORREF for #FCFCFD.
+	clickTipBorderColor = 0x00e9e4df // COLORREF for #DFE4E9.
+	clickTipTextColor   = 0x00382920 // COLORREF for #202938.
+	ttmSetTitleW        = 0x0400 + 33
+	ttmSetMargin        = 0x0400 + 26
 )
 
 // LOGFONTW has the same layout on 32/64-bit Windows.
@@ -45,7 +46,7 @@ func (tip *trackingTooltip) configureCardStyle() {
 }
 
 func clickTooltipFont(dpi uintptr) tooltipLogFont {
-	return clickCardFont(dpi, 11, 400)
+	return clickCardFont(dpi, 10, 400)
 }
 
 func clickCardFont(dpi uintptr, points, weight int32) tooltipLogFont {
@@ -63,8 +64,8 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 	if tip.font != 0 && tip.fontDPI == dpi {
 		return nil
 	}
-	var handles [3]windows.Handle
-	for i, font := range []tooltipLogFont{clickTooltipFont(dpi), clickCardFont(dpi, 14, 600), clickCardFont(dpi, 10, 400)} {
+	var handles [4]windows.Handle
+	for i, font := range []tooltipLogFont{clickTooltipFont(dpi), clickCardFont(dpi, 18, 600), clickCardFont(dpi, 10, 400), clickCardFont(dpi, 10, 600)} {
 		handle, _, err := pCreateFontIndirect.Call(uintptr(unsafe.Pointer(&font)))
 		if handle == 0 {
 			for _, allocated := range handles {
@@ -76,7 +77,7 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 		}
 		handles[i] = windows.Handle(handle)
 	}
-	oldFonts := [3]windows.Handle{tip.font, tip.valueFont, tip.detailFont}
+	oldFonts := [4]windows.Handle{tip.font, tip.valueFont, tip.detailFont, tip.countdownFont}
 	handle := uintptr(handles[0])
 	// The control does not own the supplied HFONT. Replace before deleting the
 	// previous font, and release the last font only after destroying the HWND.
@@ -87,6 +88,7 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 		}
 	}
 	tip.font, tip.valueFont, tip.detailFont, tip.fontDPI = handles[0], handles[1], handles[2], dpi
+	tip.countdownFont = handles[3]
 	for _, oldFont := range oldFonts {
 		if oldFont != 0 {
 			pDeleteObject.Call(uintptr(oldFont))
@@ -101,10 +103,11 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 }
 
 func (tip *trackingTooltip) releaseCardFont() {
-	for _, font := range [3]windows.Handle{tip.font, tip.valueFont, tip.detailFont} {
+	for _, font := range [4]windows.Handle{tip.font, tip.valueFont, tip.detailFont, tip.countdownFont} {
 		if font != 0 {
 			pDeleteObject.Call(uintptr(font))
 		}
 	}
 	tip.font, tip.valueFont, tip.detailFont, tip.fontDPI = 0, 0, 0, 0
+	tip.countdownFont = 0
 }

@@ -49,7 +49,7 @@ func clickRowMetrics(dpi uintptr) clickRowsLayout {
 		dpi = 96
 	}
 	px := func(dip int32) int32 { return int32((uintptr(dip)*dpi + 48) / 96) }
-	return clickRowsLayout{width: px(340), padding: px(14), gap: px(12), firstHeight: px(26), detailHeight: px(18)}
+	return clickRowsLayout{width: px(360), padding: px(16), gap: px(12), firstHeight: px(34), detailHeight: px(20)}
 }
 
 func clickMeasureText(dc uintptr, font windows.Handle, text string) tooltipRect {
@@ -65,6 +65,34 @@ func clickMeasureText(dc uintptr, font windows.Handle, text string) tooltipRect 
 	return rect
 }
 
+// Legacy callers can still supply a single detail line. Structured callers
+// never need their localized display text parsed to recover dates or status.
+func clickRowSecondLine(row ClickTooltipRow) (string, string) {
+	if row.Countdown == "" && row.ResetDate == "" {
+		return row.Detail, ""
+	}
+	date := row.ResetDate
+	if row.Countdown != "" && date != "" {
+		date = " · " + date
+	}
+	return row.Countdown, date
+}
+
+func (tip *trackingTooltip) rowCountdownFont(row ClickTooltipRow) windows.Handle {
+	if row.Countdown != "" {
+		return tip.countdownFont
+	}
+	return tip.detailFont
+}
+
+func (layout clickRowsLayout) rowHeight(row ClickTooltipRow) int32 {
+	height := layout.firstHeight + layout.detailHeight + layout.gap
+	if row.Status != "" {
+		height += layout.detailHeight
+	}
+	return height
+}
+
 func (tip *trackingTooltip) measureRows() clickRowsLayout {
 	layout := clickRowMetrics(tip.fontDPI)
 	dc, _, _ := pGetDC.Call(uintptr(tip.window))
@@ -73,15 +101,25 @@ func (tip *trackingTooltip) measureRows() clickRowsLayout {
 		for _, row := range tip.rows {
 			label := clickMeasureText(dc, tip.font, row.Label)
 			value := clickMeasureText(dc, tip.valueFont, row.Value)
-			detail := clickMeasureText(dc, tip.detailFont, row.Detail)
+			left, right := clickRowSecondLine(row)
+			countdown := clickMeasureText(dc, tip.rowCountdownFont(row), left)
+			date := clickMeasureText(dc, tip.detailFont, right)
+			status := clickMeasureText(dc, tip.detailFont, row.Status)
 			layout.firstHeight = clickMax32(layout.firstHeight, label.Bottom, value.Bottom)
-			layout.detailHeight = clickMax32(layout.detailHeight, detail.Bottom)
-			layout.width = clickMax32(layout.width, label.Right+value.Right+layout.gap+2*layout.padding+2, detail.Right+2*layout.padding+2)
+			layout.detailHeight = clickMax32(layout.detailHeight, countdown.Bottom, date.Bottom, status.Bottom)
+			layout.width = clickMax32(layout.width,
+				label.Right+value.Right+layout.gap+2*layout.padding+2,
+				countdown.Right+date.Right+2*layout.padding+2,
+				status.Right+2*layout.padding+2)
 		}
 	}
-	// Two lines per quota with a 12 DIP gap, then the unchanged 36 DIP actions.
-	footer := int32(36 * uintptr(clickMax32(int32(tip.fontDPI), 96)) / 96)
-	layout.height = 2*layout.padding + int32(len(tip.rows))*(layout.firstHeight+layout.detailHeight+layout.gap) + footer + 2
+	// Each exceptional status receives its own measured line; the footer stays
+	// compact regardless of how many service quotas are visible.
+	footer := int32(30 * uintptr(clickMax32(int32(tip.fontDPI), 96)) / 96)
+	layout.height = 2*layout.padding + footer + 2
+	for _, row := range tip.rows {
+		layout.height += layout.rowHeight(row)
+	}
 	return layout
 }
 
@@ -117,12 +155,37 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 		value := clickMeasureText(dc, tip.valueFont, row.Value)
 		first := tooltipRect{client.Left + layout.padding, y, client.Right - layout.padding, y + layout.firstHeight}
 		label := first
-		label.Right -= value.Right + layout.gap
-		clickDrawRowText(dc, tip.font, row.Label, label, clickTipTextColor, 0)
-		clickDrawRowText(dc, tip.valueFont, row.Value, first, clickRowValueColor(row.Remaining), 0x0002) // right
+		label.Left += value.Right + layout.gap
+		clickDrawRowText(dc, tip.valueFont, row.Value, first, clickRowValueColor(row.Remaining), 0)
+		clickDrawRowText(dc, tip.font, row.Label, label, clickTipDetailColor, 0x0002)
 		detail := tooltipRect{first.Left, first.Bottom, first.Right, first.Bottom + layout.detailHeight}
-		clickDrawRowText(dc, tip.detailFont, row.Detail, detail, clickTipDetailColor, 0)
+		left, right := clickRowSecondLine(row)
+		countdownWidth := clickMeasureText(dc, tip.rowCountdownFont(row), left).Right
+		if left == "" {
+			countdownWidth = 0
+		}
+		countdown := detail
+		countdown.Right = countdown.Left + countdownWidth
+		date := detail
+		date.Left += countdownWidth
+		countdownColor := uintptr(clickTipDetailColor)
+		if row.Countdown != "" {
+			countdownColor = clickTipTextColor
+		}
+		clickDrawRowText(dc, tip.rowCountdownFont(row), left, countdown, countdownColor, 0)
+		clickDrawRowText(dc, tip.detailFont, right, date, clickTipDetailColor, 0)
+		if row.Status != "" {
+			detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
+			clickDrawRowText(dc, tip.detailFont, row.Status, detail, clickTipDetailColor, 0)
+		}
 		y = detail.Bottom + layout.gap
+	}
+	// A quiet rule separates the summary from its ghost actions.
+	rule := tooltipRect{client.Left + layout.padding, y - layout.gap/2, client.Right - layout.padding, y - layout.gap/2 + 1}
+	border, _, _ := pCreateSolidBrush.Call(clickTipBorderColor)
+	if border != 0 {
+		pFillRect.Call(dc, uintptr(unsafe.Pointer(&rule)), border)
+		pDeleteObject.Call(border)
 	}
 	return true
 }

@@ -267,10 +267,12 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .cl span{font-size:12px;color:var(--sub);font-weight:500;margin-left:3px;letter-spacing:0}
 .cl.unknown{font-size:17px;color:var(--sub);font-weight:600;letter-spacing:0}
 .cl.warn{color:var(--warn)}.cl.bad{color:var(--bad)}
-.cs{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;color:var(--sub);font-size:13px;margin-top:12px;flex-wrap:wrap}
+.card-details{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;margin-top:12px}
+.cs{display:flex;align-items:baseline;justify-content:flex-start;gap:5px 8px;color:var(--sub);font-size:13px;flex-wrap:wrap;flex:1;min-width:0}
 .cs strong{font-size:14px;color:var(--tx);font-weight:750}
-.cs time{white-space:nowrap;font-variant-numeric:tabular-nums;margin-left:auto}
-.card-notes{color:var(--dim);font-size:11px;margin-top:5px;overflow-wrap:anywhere;text-align:right}
+.cs time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.cs time:before{content:'·';margin-right:8px}
+.card-notes{color:var(--dim);font-size:11px;overflow-wrap:anywhere;text-align:right;flex:0 1 auto;max-width:40%}
 .card-note.bad{color:var(--bad)}.card-note.live{color:var(--accent)}
 .chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:11px;line-height:1.3;padding:3px 7px;border-radius:6px}
 .panel{padding:17px 19px}
@@ -324,6 +326,7 @@ footer{color:var(--dim);font-size:11px;margin-top:16px;overflow-wrap:anywhere}
   .row.cards,.row.two,.stats{grid-template-columns:1fr}
   .ch-x.sec{visibility:hidden}
 }
+@media(max-width:620px){.cs time{flex-basis:100%}.cs time:before{display:none}}
 @media(max-width:480px){
   body{padding:20px 14px 26px}header{margin-bottom:16px}
   .header-top{gap:14px;margin-bottom:12px}.header-status{width:100%;margin-left:0;justify-content:space-between;gap:8px}.meta{font-size:11px}
@@ -583,7 +586,7 @@ func cardHTMLAt(c gaugeCard, now time.Time) string {
 	}
 	return fmt.Sprintf(`<div class="card" data-agent="%s"><div class="cbody"><div class="card-top">`+
 		`<div class="cl%s">%s</div><div class="ct">%s<span class="ct-label">%s</span></div></div>`+
-		`<div class="cs">%s</div>%s</div></div>`,
+		`<div class="card-details"><div class="cs">%s</div>%s</div></div></div>`,
 		strings.ToLower(c.Mark.name), cls, left, agentIcon(c.Mark, "sm"), html.EscapeString(c.Title),
 		resetHTML, info)
 }

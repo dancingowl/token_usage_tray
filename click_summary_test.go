@@ -95,3 +95,25 @@ func TestClickSummaryLimitDoesNotMislabelHealthyQuota(t *testing.T) {
 		t.Fatalf("short limit must not be attached to healthy week: %+v", rows)
 	}
 }
+
+func TestClickSummaryStructuredResetColumnsAndExceptions(t *testing.T) {
+	now := time.Date(2026, 12, 31, 23, 59, 40, 0, time.UTC)
+	s := State{Codex: AgentUsage{Available: true, Src: "cache", AgeMin: 12, Limit: "rate_limit",
+		Short: Window{Left: 0, ResetAt: now.Add(30 * time.Second).Unix()},
+		Week:  Window{Left: 70, ResetAt: now.Add(-time.Minute).Unix()},
+	}}
+	rows := clickSummaryRowsAt(&s, now)
+	if len(rows) != 2 {
+		t.Fatalf("want both quotas: %+v", rows)
+	}
+	if rows[0].Countdown != "1분 후 초기화" || rows[0].ResetDate != "2027/1/1(금) 00:00" || rows[0].Status != "캐시 12분 전 · 한도 도달" {
+		t.Fatalf("future reset columns/status: %+v", rows[0])
+	}
+	if rows[1].Countdown != "초기화 갱신 대기" || rows[1].ResetDate != "12/31(목) 23:58" || rows[1].Status != "초기화 시각 경과 · 캐시 12분 전" {
+		t.Fatalf("elapsed reset columns/status: %+v", rows[1])
+	}
+	unknown := clickSummaryRowsAt(&State{Codex: AgentUsage{Available: true, Short: Window{Left: -1}, Week: Window{Left: -1}}}, now)
+	if len(unknown) != 1 || unknown[0].Countdown != "초기화 시각 확인 중" || unknown[0].ResetDate != "" || unknown[0].Status != "" {
+		t.Fatalf("unknown reset columns: %+v", unknown)
+	}
+}
