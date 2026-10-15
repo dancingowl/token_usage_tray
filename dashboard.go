@@ -38,10 +38,11 @@ details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summ
 .dash-history-chart{width:100%;height:250px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-point{fill:transparent;stroke:none}.dash-chart-point:focus{outline:none}
 .history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
 .dash-forecast{font-size:13px}.dash-forecast p{margin:4px 0}.dash-release{color:#0f766e}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
-.pace-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0}.pace-metric dt{font-size:12px;color:var(--sub);margin-bottom:7px}.pace-metric dd{margin:0;font-size:26px;line-height:1.3;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.pace-metric dd span{font-size:13px;font-weight:400;letter-spacing:0;margin-left:4px;color:var(--sub)}.pace-metric .pace-note{margin-top:6px;font-size:12px;color:var(--sub)}.pace-forecast{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:20px}.pace-forecast-label{display:block;color:var(--sub);font-size:12px;margin-bottom:7px}.pace-estimate{display:flex;align-items:baseline;gap:6px 10px;flex-wrap:wrap;min-width:0}.pace-date{font-size:30px;font-weight:750;line-height:1.25;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.pace-status{color:var(--sub);font-size:14px;font-weight:500}.risk .pace-status{color:#a33c3c}.pace-empty{color:var(--sub);font-size:12px}
+.pace-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.pace-group{min-width:0}.pace-group h3{font-size:14px;font-weight:650;margin:0 0 16px}.pace-plan{border-left:1px solid var(--line);padding-left:24px}.pace-metrics,.pace-observation-metrics{display:grid;gap:12px;margin:0}.pace-metric{min-width:0}.pace-metric dt{font-size:12px;color:var(--sub);margin-bottom:7px}.pace-metric dd{margin:0;font-size:26px;line-height:1.3;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.pace-metric dd span{font-size:13px;font-weight:400;letter-spacing:0;margin-left:4px;color:var(--sub)}.pace-note{font-size:12px;color:var(--sub);overflow-wrap:anywhere}.pace-metric .pace-note{margin-top:6px}.pace-plan .pace-metric{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:4px 12px}.pace-plan .pace-metric dt{margin:0;word-break:keep-all}.pace-plan .pace-metric dd{font-size:24px;white-space:nowrap}.pace-plan .pace-metric .pace-note{grid-column:1/-1}.pace-plan>.pace-reduction{margin-top:12px;word-break:keep-all}.pace-forecast{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:20px}.pace-forecast-label{display:block;color:var(--sub);font-size:12px;margin-bottom:7px}.pace-estimate{display:flex;align-items:baseline;gap:6px 10px;flex-wrap:wrap;min-width:0}.pace-date{font-size:30px;font-weight:750;line-height:1.25;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.pace-status{color:var(--sub);font-size:14px;font-weight:500}.risk .pace-status{color:#a33c3c}.pace-assumption{color:var(--sub);font-size:12px;padding-top:6px}.pace-empty{color:var(--sub);font-size:12px}
 body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .cl{font-size:26px}
 @media(max-width:620px){.dash-grid{grid-template-columns:1fr}.dash-form-grid{grid-template-columns:1fr}.dash-actions select{max-width:100%}.summary-note{display:none}.quick-toolbar{justify-content:flex-start}.quick-toolbar .dash-message{text-align:left}}
 @media(max-width:620px){.history-controls{grid-template-columns:1fr}.history-controls label{display:grid;grid-template-columns:60px minmax(0,1fr)}.history-controls select{width:100%}.dash-chart-labels{font-size:11px}}
+@media(max-width:620px){.pace-groups{grid-template-columns:1fr;gap:18px}.pace-plan{border-left:0;border-top:1px solid var(--line);padding:18px 0 0}}
 `
 
 const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button><button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>`
@@ -54,7 +55,7 @@ const dashboardHTML = `
   <div id="history-overview" class="history-overview" hidden></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
  </section>
- <section id="usage-plan" class="panel page-section dashboard-full" aria-labelledby="usage-plan-title"><div class="history-heading"><h2 id="usage-plan-title">사용 계획<span id="usage-plan-context" class="summary-note"></span></h2><details id="usage-plan-help" class="history-help hover-help"><summary aria-label="사용 계획 도움말">?</summary><div class="history-help-content"><p>하루 사용 가능량은 남은 한도를 초기화까지 균등하게 나눈 값입니다. 최근 사용량은 현재 한도 주기의 관측 기록으로 계산한 하루 기준 속도입니다.</p><p>%p는 전체 한도 기준의 변화량입니다. 잔량이 80%에서 70%가 되면 10%p를 사용한 것입니다. 초기화까지 하루 미만이면 시간당 값도 표시합니다.</p><p>소진 시점은 최근 사용 속도가 유지된다는 가정의 추정값입니다.</p></div></details></div>
+ <section id="usage-plan" class="panel page-section dashboard-full" aria-labelledby="usage-plan-title"><div class="history-heading"><h2 id="usage-plan-title">사용 계획<span id="usage-plan-context" class="summary-note"></span></h2><details id="usage-plan-help" class="history-help hover-help"><summary aria-label="사용 계획 도움말">?</summary><div class="history-help-content"><p>관측 사용량은 표시된 시작·종료 시각 사이의 잔여 한도 감소량입니다. 정수로 반올림해 저장한 잔량의 차이이며, 실제 토큰 수가 아닙니다.</p><p>현재 환산 속도는 관측 사용량을 24시간 기준으로 환산한 값이며, 지난 하루의 실제 사용량과 다릅니다. 초기화까지의 하루 예산은 남은 한도를 초기화까지 균등하게 나눠 쓰기 위한 하루 목표입니다.</p><p>%p는 전체 한도 기준의 변화량입니다. 잔량이 80%에서 70%가 되면 10%p를 사용한 것입니다. 초기화까지 하루 미만이면 시간당 예산도 표시합니다.</p><p>관측 구간은 초기화·출처 변화·잔량 회복 이후부터 계산하며 그래프 기간 필터와 독립적입니다. 소진 시점은 이 구간의 평균 사용 속도가 유지된다는 가정의 추정값입니다.</p></div></details></div>
   <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div>
  </section>
  <section id="settings" class="dashboard-full"><div id="settings-details" class="panel page-section"><h2>설정<span class="summary-note">표시 · 알림 · 자동 실행</span></h2>
@@ -354,19 +355,35 @@ function drawHistory() {
  const pace=usagePaceAdvice(forecast);
  const ready=!!(forecast && forecast.ready && Number.isFinite(forecast.rate_per_day) && forecast.rate_per_day>0);
  const budget=forecast && Number.isFinite(forecast.daily_budget) && forecast.daily_budget>=0 ? forecast.daily_budget:null;
- const metrics=textNode('dl','','pace-metrics');
- function metric(label,value,className){
+ const observation=forecast && forecast.observation,observedStart=Date.parse(observation && observation.started_at),observedEnd=Date.parse(observation && observation.ended_at);
+ const observed=!!(observation && Number.isFinite(observedStart) && Number.isFinite(observedEnd) && observedEnd>observedStart && [observation.start_left,observation.end_left,observation.used_pp].every(value=>Number.isInteger(value) && value>=0 && value<=100) && observation.start_left-observation.end_left===observation.used_pp);
+ const groups=textNode('div','','pace-groups'),records=textNode('section','','pace-group pace-records'),plan=textNode('section','','pace-group pace-plan');
+ const recordsHeading=textNode('h3','관측 기록'),planHeading=textNode('h3','사용 계획');
+ recordsHeading.id='pace-records-title';planHeading.id='pace-plan-title';records.setAttribute('aria-labelledby',recordsHeading.id);plan.setAttribute('aria-labelledby',planHeading.id);
+ const observedMetrics=textNode('dl','','pace-observation-metrics'),metrics=textNode('dl','','pace-metrics');
+ records.append(recordsHeading,observedMetrics);plan.append(planHeading,metrics);groups.append(records,plan);
+ function metric(container,label,value,className,unit='%p / 일'){
   const group=textNode('div','','pace-metric '+className);group.append(textNode('dt',label));
-  const amount=textNode('dd',value===null?'—':quotaPaceLabel(value).replace('%p',''));
-  if(value!==null)amount.append(textNode('span','%p / 일'));
-  group.append(amount);metrics.append(group);return group;
+  const amount=textNode('dd',value===null?'—':unit==='%p'?String(value):quotaPaceLabel(value).replace('%p',''));
+  if(value!==null)amount.append(textNode('span',unit));
+  group.append(amount);container.append(group);return group;
  }
- const target=metric('하루 사용 가능량',budget,'pace-target');
- metric('최근 사용량',ready?forecast.rate_per_day:null,'pace-recent');
+ const actual=metric(observedMetrics,'사용량',observed?observation.used_pp:null,'pace-observed','%p');
+ if(observed){
+  const minutes=Math.floor((observedEnd-observedStart)/60000),days=Math.floor(minutes/1440),hours=Math.floor(minutes%1440/60),mins=minutes%60;
+  const duration=[days?days+'일':'',hours?hours+'시간':'',mins?mins+'분':''].filter(Boolean).join(' ') || '1분 미만';
+  actual.append(textNode('p','잔량 '+observation.start_left+'% → '+observation.end_left+'%','pace-note pace-observation-change'));
+  const firstDate=new Date(observedStart),lastDate=new Date(observedEnd),sameDay=firstDate.toDateString()===lastDate.toDateString();
+  const label=(ms,includeDate)=>{const date=new Date(ms),year=includeDate && date.getFullYear()!==new Date(historyData.rangeEnd).getFullYear()?date.getFullYear()+'/':'';return year+historyShortDate(ms,includeDate);};
+  const range=label(observedStart,true)+' ~ '+label(observedEnd,!sameDay);
+  actual.append(textNode('p','약 '+duration+' 관측 ('+range+')','pace-note pace-observation-range'));
+ }else actual.append(textNode('p','비교할 관측 기록이 부족합니다.','pace-note'));
+ const target=metric(metrics,'초기화까지의 하루 예산',budget,'pace-target');
+ metric(metrics,'현재 환산 속도',ready?forecast.rate_per_day:null,'pace-recent');
  if(budget===0)target.append(textNode('p','남은 한도 없음','pace-note'));
- else if(pace && pace.reduction>0)target.append(textNode('p','최근보다 '+(pace.reduction<1?'1% 미만':Math.min(99,Math.round(pace.reduction))+'%')+' 적게','pace-note pace-reduction'));
+ else if(pace && pace.reduction>0)plan.append(textNode('p','현재 환산 속도보다 '+(pace.reduction<1?'1% 미만':Math.min(99,Math.round(pace.reduction))+'%')+' 적게 사용','pace-note pace-reduction'));
  if(budget>0 && forecast.reset_at*1000-historyData.rangeEnd<86400000 && forecast.reset_at*1000>historyData.rangeEnd)target.append(textNode('p','시간당 '+quotaPaceLabel(budget/24),'pace-note'));
- box.append(metrics);
+ box.append(groups);
  if(!ready){box.append(textNode('p',forecast && forecast.reason || '예측에 필요한 기록이 부족합니다.','pace-empty'));return;}
  box.classList.toggle('risk',!!forecast.exhausts_before_reset);
  if(forecast.estimated_exhaustion){
@@ -375,7 +392,8 @@ function drawHistory() {
   const display=isNaN(date)?'확인 중':date.toLocaleString('ko-KR',{...(date.getFullYear()!==new Date(historyData.rangeEnd).getFullYear()?{year:'numeric'}:{}),month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
   const estimate=textNode('span','','pace-estimate'),stamp=textNode('time',display,'pace-date');if(!isNaN(date))stamp.dateTime=date.toISOString();estimate.append(stamp);
   const status=forecastResetLead(forecast).replace('초기화보다 약 ','초기화 ').replace(' 먼저 소진 예상',' 전') || (forecast.exhausts_before_reset?'초기화 전 소진 예상':'초기화 전 소진 위험 낮음');
-  estimate.append(textNode('span','('+status+')','pace-status'));line.append(estimate);box.prepend(line);
+  estimate.append(textNode('span','('+status+')','pace-status'));line.append(estimate);
+  line.append(textNode('p','관측 구간의 평균 사용 속도가 계속 유지될 경우의 추정입니다.','pace-assumption'));box.prepend(line);
  }
 }
 async function loadHistory() {

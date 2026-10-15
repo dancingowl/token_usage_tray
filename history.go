@@ -25,16 +25,27 @@ type usageHistorySample struct {
 }
 
 type usageForecast struct {
-	Agent               string     `json:"agent"`
-	Window              string     `json:"window"`
-	Ready               bool       `json:"ready"`
-	Reason              string     `json:"reason"`
-	RatePerDay          float64    `json:"rate_per_day"`
-	EstimatedExhaustion *time.Time `json:"estimated_exhaustion,omitempty"`
-	ResetAt             int64      `json:"reset_at,omitempty"`
-	ExhaustsBeforeReset bool       `json:"exhausts_before_reset"`
-	DailyBudget         *float64   `json:"daily_budget,omitempty"`
-	Samples             int        `json:"samples"`
+	Agent               string            `json:"agent"`
+	Window              string            `json:"window"`
+	Ready               bool              `json:"ready"`
+	Reason              string            `json:"reason"`
+	RatePerDay          float64           `json:"rate_per_day"`
+	EstimatedExhaustion *time.Time        `json:"estimated_exhaustion,omitempty"`
+	ResetAt             int64             `json:"reset_at,omitempty"`
+	ExhaustsBeforeReset bool              `json:"exhausts_before_reset"`
+	DailyBudget         *float64          `json:"daily_budget,omitempty"`
+	Samples             int               `json:"samples"`
+	Observation         *usageObservation `json:"observation,omitempty"`
+}
+
+// Actual endpoint change within the same contiguous quota cycle. This is an
+// observed percentage-point drop, independent of whether a forecast is ready.
+type usageObservation struct {
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
+	StartLeft int       `json:"start_left"`
+	EndLeft   int       `json:"end_left"`
+	UsedPP    int       `json:"used_pp"`
 }
 
 const (
@@ -214,6 +225,11 @@ func forecastUsageHistory(samples []usageHistorySample, now time.Time) []usageFo
 			}
 			first, last := cycle[0], cycle[len(cycle)-1]
 			f := usageForecast{Agent: agent, Window: window, Samples: len(cycle)}
+			if len(cycle) >= 2 && last.At.After(first.At) && now.Sub(last.At) <= historyFreshness &&
+				(last.ResetAt == 0 || time.Unix(last.ResetAt, 0).After(now)) {
+				f.Observation = &usageObservation{StartedAt: first.At, EndedAt: last.At,
+					StartLeft: first.Left, EndLeft: last.Left, UsedPP: first.Left - last.Left}
+			}
 			if now.Sub(last.At) <= historyFreshness && time.Unix(last.ResetAt, 0).After(now) {
 				budget := float64(last.Left) / time.Unix(last.ResetAt, 0).Sub(now).Hours() * 24
 				f.DailyBudget = &budget
@@ -292,6 +308,7 @@ func usageHistorySnapshot(now time.Time, days int) ([]usageHistorySample, []usag
 			!u.FetchedAt.Equal(latest.At) || u.Src != latest.Source || w.ResetAt != latest.ResetAt || w.WindowS != latest.WindowS || w.Left != latest.Left {
 			f.Ready, f.ExhaustsBeforeReset, f.RatePerDay = false, false, 0
 			f.EstimatedExhaustion, f.DailyBudget = nil, nil
+			f.Observation = nil
 			f.Reason = "현재 조회가 실제 최신 관측이 아니어서 예상을 숨겼습니다."
 		}
 	}

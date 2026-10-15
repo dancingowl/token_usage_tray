@@ -75,6 +75,80 @@ func TestUsageForecastCalculation(t *testing.T) {
 	}
 }
 
+func TestUsageObservationSeparatesMeasuredDropFromDailyRate(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	samples := historySamples(now)
+	for i, left := range []int{100, 96, 93} {
+		samples[i].At = now.Add(time.Duration(i-2) * time.Hour)
+		samples[i].Left = left
+	}
+	f := forecastUsageHistory(samples, now)[0]
+	o := f.Observation
+	if !f.Ready || f.RatePerDay != 84 || o == nil || o.UsedPP != 7 || o.StartLeft != 100 || o.EndLeft != 93 ||
+		!o.StartedAt.Equal(samples[0].At) || !o.EndedAt.Equal(samples[2].At) {
+		t.Fatalf("measured interval must remain separate from daily extrapolation: %+v, %+v", f, o)
+	}
+}
+
+func TestUsageObservationIndependentOfForecastReadiness(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	for _, condition := range []string{"single", "two", "short_zero_drop", "unknown_reset", "unknown_duration", "stale", "elapsed_reset", "reset_now", "freshness_boundary"} {
+		t.Run(condition, func(t *testing.T) {
+			samples := historySamples(now)
+			want := true
+			switch condition {
+			case "single":
+				samples, want = samples[2:], false
+			case "two":
+				samples = samples[1:]
+			case "short_zero_drop":
+				for i := range samples {
+					samples[i].At, samples[i].Left = now.Add(time.Duration(i-2)*time.Minute), 80
+				}
+			case "unknown_reset", "unknown_duration":
+				for i := range samples {
+					if condition == "unknown_reset" {
+						samples[i].ResetAt = 0
+					} else {
+						samples[i].WindowS = 0
+					}
+				}
+			case "stale", "freshness_boundary":
+				age := historyFreshness
+				if condition == "stale" {
+					age += time.Nanosecond
+					want = false
+				}
+				for i := range samples {
+					samples[i].At = samples[i].At.Add(-age)
+				}
+			case "elapsed_reset", "reset_now":
+				reset := now
+				if condition == "elapsed_reset" {
+					reset = now.Add(-time.Second)
+				}
+				for i := range samples {
+					samples[i].ResetAt = reset.Unix()
+				}
+				want = false
+			}
+			f := forecastUsageHistory(samples, now)[0]
+			if (f.Observation != nil) != want {
+				t.Fatalf("unexpected observed interval availability: %+v", f)
+			}
+			if condition != "freshness_boundary" && f.Ready {
+				t.Fatalf("insufficient forecast evidence became ready: %+v", f)
+			}
+			if want {
+				o := f.Observation
+				if o.UsedPP != samples[0].Left-samples[len(samples)-1].Left || !o.StartedAt.Equal(samples[0].At) || !o.EndedAt.Equal(samples[len(samples)-1].At) {
+					t.Fatalf("wrong actual endpoints: %+v", o)
+				}
+			}
+		})
+	}
+}
+
 func TestUsageForecastMinimumEvidenceAndResetComparison(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	samples := historySamples(now)
@@ -115,8 +189,16 @@ func TestUsageForecastNewCycle(t *testing.T) {
 				last.Source = "앱 기록"
 			}
 			f := forecastUsageHistory(append(samples, last), now)[0]
-			if f.Ready || f.Samples != 1 || f.EstimatedExhaustion != nil {
+			if f.Ready || f.Samples != 1 || f.EstimatedExhaustion != nil || f.Observation != nil {
 				t.Fatalf("mixed quota cycles: %+v", f)
+			}
+			// A second observation measures only the new cycle, including recovery
+			// and source boundaries, without waiting for forecast readiness.
+			next := last
+			next.At, next.Left = now.Add(time.Minute), last.Left-1
+			f = forecastUsageHistory(append(samples, last, next), next.At)[0]
+			if f.Ready || f.Observation == nil || f.Observation.UsedPP != 1 || !f.Observation.StartedAt.Equal(last.At) {
+				t.Fatalf("observation crossed cycle boundary: %+v", f)
 			}
 		})
 	}
@@ -282,6 +364,57 @@ func TestUsageHistoryCorruptFileKeepsOtherHistory(t *testing.T) {
 	samples, _, err := usageHistorySnapshot(now, 1)
 	if err == nil || len(samples) != 3 {
 		t.Fatalf("should return valid partial history and diagnostic: %v %v", samples, err)
+	}
+}
+
+func TestUsageHistorySnapshotSuppressesObservationForInvalidCurrentState(t *testing.T) {
+	for _, condition := range []string{"not_ok", "cached", "missing_time", "future", "stale", "different_time", "different_source", "reset", "duration", "left"} {
+		t.Run(condition, func(t *testing.T) {
+			isolateUsageHistory(t)
+			now := time.Now().Truncate(time.Second)
+			samples := historySamples(now)
+			if err := writeUsageHistory(historyPath(), samples); err != nil {
+				t.Fatal(err)
+			}
+			s := historyStateFromSample(samples[2])
+			mu.Lock()
+			state = s
+			mu.Unlock()
+			_, forecasts, err := usageHistorySnapshot(now, 7)
+			if err != nil || len(forecasts) != 1 || forecasts[0].Observation == nil {
+				t.Fatalf("valid current state must expose observation: %+v, %v", forecasts, err)
+			}
+			switch condition {
+			case "not_ok":
+				s.Claude.OK = false
+			case "cached":
+				s.Claude.Src = "직전값"
+			case "missing_time":
+				s.Claude.FetchedAt = time.Time{}
+			case "future":
+				s.Claude.FetchedAt = now.Add(time.Second)
+			case "stale":
+				s.Claude.FetchedAt = now.Add(-historyFreshness - time.Second)
+			case "different_time":
+				s.Claude.FetchedAt = now.Add(-time.Second)
+			case "different_source":
+				s.Claude.Src = "앱 기록"
+			case "reset":
+				s.Claude.Short.ResetAt++
+			case "duration":
+				s.Claude.Short.WindowS++
+			case "left":
+				s.Claude.Short.Left--
+			}
+			_, forecasts, err = usageHistorySnapshot(now, 7)
+			if err != nil || len(forecasts) != 1 {
+				t.Fatalf("snapshot failed: %+v, %v", forecasts, err)
+			}
+			f := forecasts[0]
+			if f.Observation != nil || f.Ready || f.RatePerDay != 0 || f.EstimatedExhaustion != nil || f.DailyBudget != nil {
+				t.Fatalf("current mismatch retained derived information: %+v", f)
+			}
+		})
 	}
 }
 
