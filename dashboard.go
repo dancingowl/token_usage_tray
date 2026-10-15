@@ -5,10 +5,11 @@ package main
 const dashboardCSS = `
 [hidden]{display:none!important}
 .dashboard{margin-bottom:14px}.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:24px;margin-top:20px}
-body:not([data-page="usage"]) #history-details,body:not([data-page="settings"]) #settings,body:not([data-page="settings"]) #system-details{display:none}
+body:not([data-page="usage"]) #history-details,body:not([data-page="usage"]) #usage-plan,body:not([data-page="settings"]) #settings,body:not([data-page="settings"]) #system-details{display:none}
 
 
 .page-section{margin-bottom:16px}.page-section>h2{font-size:17px;color:var(--tx);margin-bottom:20px}.page-section>h2 .summary-note{margin-left:10px}
+#usage-plan-title{flex-wrap:wrap}#usage-plan-context{display:inline}
 .dash-panel{margin-bottom:14px}.dash-panel h2{font-size:15px;color:var(--tx);margin-bottom:12px}
 .dash-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .history-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:650px}.history-controls label{display:flex;align-items:center;gap:8px;white-space:nowrap}.history-controls select{flex:1;width:0}
@@ -51,6 +52,8 @@ const dashboardHTML = `
   <div class="history-view-controls"><span id="history-view-label">전체 기간</span><button type="button" id="history-zoom" aria-pressed="true" aria-controls="history-chart history-overview" disabled>기록 구간 확대</button></div>
   <div id="history-overview" class="history-overview" hidden></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
+ </section>
+ <section id="usage-plan" class="panel page-section dashboard-full" aria-labelledby="usage-plan-title"><h2 id="usage-plan-title">사용 계획<span id="usage-plan-context" class="summary-note"></span></h2>
   <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div>
  </section>
  <section id="settings" class="dashboard-full"><div id="settings-details" class="panel page-section"><h2>설정<span class="summary-note">표시 · 알림 · 자동 실행</span></h2>
@@ -304,6 +307,7 @@ function drawHistoryOverview(samples,full,zoom,days) {
 function drawHistory() {
  if(!historyData)return;
  const agent=$('history-agent').value, windowName=$('history-window').value;
+ $('usage-plan-context').textContent=names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도');
  const full=historyRange(historyData.displayDays,historyData.rangeEnd);
  const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && new Date(s.at).getTime()>=full.start && new Date(s.at).getTime()<=full.end).sort((a,b)=>new Date(a.at)-new Date(b.at));
  const zoom=historyZoomRange(samples,full),canZoom=zoom.start>full.start || zoom.end<full.end,zoomed=historyZoom && canZoom;
@@ -327,7 +331,6 @@ function drawHistory() {
   points.forEach((p,index)=>{if(index && (p.segment!==points[index-1].segment || p.bucket-points[index-1].bucket>1))line();segment.push(p);});line();
   for(const p of points) { const label='구간 마지막 관측 · '+timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,tabindex:0,class:'dash-chart-point','aria-label':label,'data-at':p.s.at});svg.append(dot);dots.push({dot,point:p}); }
   const tickCount=Math.max(2,Math.min(6,Math.floor(plotWidth/90)));
-  const acrossDates=new Date(start).toDateString()!==new Date(end).toDateString();
   for(let i=0;i<=tickCount;i++){
    const at=start+(end-start)*i/tickCount,x=48+plotWidth*i/tickCount,d=new Date(at);
    const tick=svgElement('text',{x,y:202,fill:'#626b78','font-size':11,'text-anchor':i===0?'start':i===tickCount?'end':'middle',class:'history-tick'});
@@ -336,7 +339,7 @@ function drawHistory() {
    svg.append(tick);
   }
   if(!points.length){const empty=svgElement('text',{x:48+plotWidth/2,y:102,'text-anchor':'middle',fill:'#626b78','font-size':12});empty.textContent='기록 없음';svg.append(empty);}
-  chart.append(svg);chart.append(textNode('p',historyShortDate(start)+'–'+historyShortDate(end,acrossDates)+(zoomed?' · 기록 구간 확대':' · 최근 '+historyData.displayDays+'일 전체'),'history-range'));
+  chart.append(svg);
   if(points.length)attachHistoryDetails(chart,svg,points,dots,{start,end,interval,width});
   if(focusedAt){const target=dots.reduce((best,item)=>Math.abs(new Date(item.point.s.at)-new Date(focusedAt))<Math.abs(new Date(best.point.s.at)-new Date(focusedAt))?item:best,dots[0]);if(target)target.dot.focus({preventScroll:true});}
  }
