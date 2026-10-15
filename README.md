@@ -139,9 +139,14 @@ go run . -once
 `-once`는 사용량을 조회하고 상태 파일을 저장한 뒤 종료하며, 트레이와 HTTP 서버는 띄우지 않는다.
 검증 후에는 트레이 메뉴에서 종료하고 `Remove-Item Env:USAGE_TRAY_DATA_DIR`로 데이터 경로 설정을 해제한다.
 
-앱 아이콘은 `rsrc_windows.syso` 로 exe 에 박혀 있다(리포에 들어 있어 그냥 빌드하면 된다).
-그림을 바꾸려면 `assets/icon.png` 를 갈아 끼우고 `assets/icon.ico` · `assets/favicon32.png`
-를 다시 만든 뒤 아래를 한 번 돌린다.
+앱 아이콘은 어두운 둥근 사각형 안의 민트색 계기판이다. 실행 파일·바로가기·상세 화면에 사용하며,
+트레이의 도넛·숫자 잔여량 표시는 별개다. 계기판은 [Lucide Gauge](https://lucide.dev/icons/gauge)를
+바탕으로 만들었으며 출처와 ISC 라이선스는 `assets/LICENSE.lucide.txt`에 보존한다.
+
+앱 아이콘은 `rsrc_windows.syso`로 exe에 포함되어 있어 바로 빌드하면 된다.
+그림을 바꾸려면 `assets/icon.svg`를 수정하고 `assets/icon.png`(1024px),
+`assets/icon.ico`(16·20·24·32·48·64·128·256px), `assets/favicon32.png`(32px)를
+다시 만든 뒤 아래를 한 번 돌린다. 파생 PNG의 `License` 메타데이터에도 라이선스를 포함한다.
 
 ```powershell
 go run github.com/akavel/rsrc@latest -ico assets\icon.ico -arch amd64 -o rsrc_windows.syso

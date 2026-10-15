@@ -1,0 +1,9 @@
+<!-- Gauge symbol adapted from Lucide Icons: https://lucide.dev/icons/gauge
+     Copyright (c) 2026 Lucide Icons and Contributors. ISC license: LICENSE.lucide.txt -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#1b222c"/>
+  <g transform="translate(8 8) scale(2)" fill="none" stroke="#5bd4bb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m12 14 4-4"/>
+    <path d="M3.34 19a10 10 0 1 1 17.32 0"/>
+  </g>
+</svg>
