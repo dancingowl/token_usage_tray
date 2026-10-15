@@ -75,7 +75,8 @@ func sanitizedState(s State) State {
 func appHTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+		view, exists := map[string]string{"/": "usage", "/tokens": "tokens", "/settings": "settings"}[r.URL.Path]
+		if !exists {
 			http.NotFound(w, r)
 			return
 		}
@@ -85,7 +86,7 @@ func appHTTPHandler() http.Handler {
 		}
 		s := sanitizedState(mergedState())
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, renderPage(&s, mergedTokens()))
+		fmt.Fprint(w, renderPageView(&s, mergedTokens(), view))
 	})
 	mux.HandleFunc("/state.json", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

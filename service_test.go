@@ -18,6 +18,31 @@ func apiRequest(method, path, body string) *http.Request {
 	return r
 }
 
+func TestDashboardPageRoutes(t *testing.T) {
+	h := appHTTPHandler()
+	for _, tc := range []struct{ path, view, title string }{
+		{"/", "usage", "한도 현황"},
+		{"/tokens", "tokens", "토큰 통계"},
+		{"/settings", "settings", "설정"},
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, apiRequest("GET", tc.path, ""))
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `data-page="`+tc.view+`"`) || !strings.Contains(w.Body.String(), "<title>Usage Tray · "+tc.title+"</title>") {
+			t.Errorf("route %s did not select %s: status %d", tc.path, tc.view, w.Code)
+		}
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, apiRequest("POST", tc.path, ""))
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("POST %s returned %d", tc.path, w.Code)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, apiRequest("GET", "/missing-page", ""))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("unknown page returned %d", w.Code)
+	}
+}
+
 func TestSettingsAPIValidationAndPersistence(t *testing.T) {
 	t.Setenv("USAGE_TRAY_DATA_DIR", t.TempDir())
 	h := appHTTPHandler()

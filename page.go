@@ -6,7 +6,7 @@ package main
 // Windows 는 WinForms, macOS 는 Cocoa 로 따로 만들어야 한다(= 두 벌 유지). HTML 한 장이면
 // 양쪽이 같고, 차트·표를 그리기도 훨씬 쉽다. 브라우저 탭으로 열린다.
 //
-// 카드와 갱신 가능한 통계를 나누어 설정 입력과 접힘 상태를 유지한다.
+// 화면별 주소를 나누고, 갱신 가능한 통계를 분리해 설정 입력을 유지한다.
 
 import (
 	"encoding/base64"
@@ -249,6 +249,8 @@ h1{font-size:21px;line-height:1.2;letter-spacing:-.03em;margin:0;font-weight:750
 .page-nav{margin-left:auto;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .page-nav a{color:var(--sub);font-size:13px;text-decoration:none;border-radius:8px;padding:7px 11px}
 .page-nav a:hover{background:#e8efed;color:var(--accent)}
+.page-nav a[aria-current="page"]{background:#e1eeea;color:#0c695d;font-weight:700}
+body:not([data-page="usage"]) #usage-snapshot,body:not([data-page="tokens"]) #token-details{display:none}
 a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .row{display:grid;gap:12px;margin-bottom:14px;min-width:0}
 .row.cards,.row.two{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -263,15 +265,17 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .cl span{font-size:12px;color:var(--sub);font-weight:500;margin-left:3px;letter-spacing:0}
 .cl.unknown{font-size:17px;color:var(--sub);font-weight:600;letter-spacing:0}
 .cl.warn{color:var(--warn)}.cl.bad{color:var(--bad)}
-.cs{color:var(--sub);font-size:12px;margin-top:9px;overflow-wrap:anywhere}
+.cs{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;color:var(--sub);font-size:13px;margin-top:12px;flex-wrap:wrap}
+.cs strong{font-size:14px;color:var(--tx);font-weight:750}
+.cs time{white-space:nowrap;font-variant-numeric:tabular-nums}
 .card-notes{color:var(--dim);font-size:11px;margin-top:5px;overflow-wrap:anywhere}
 .card-note.bad{color:var(--bad)}.card-note.live{color:var(--accent)}
 .chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:11px;line-height:1.3;padding:3px 7px;border-radius:6px}
 .panel{padding:17px 19px}
 .panel h2{font-size:13px;color:var(--sub);margin:0 0 14px;font-weight:650;display:flex;align-items:center;gap:8px}
 .token-details{margin-top:2px}
-.token-details>summary{color:var(--tx)}
-.token-details[open]>summary{margin-bottom:18px}
+.token-details>h2{color:var(--tx);font-size:17px;margin-bottom:18px}
+.token-details>h2 .summary-note{margin-left:12px}
 .token-details #token-snapshot>.row:last-of-type{margin-bottom:0}
 .token-details .panel,.token-details .stat{background:var(--panel2)}
 .chart{position:relative;padding-left:48px}
@@ -328,17 +332,40 @@ footer{color:var(--dim);font-size:11px;margin-top:16px;overflow-wrap:anywhere}
 `
 
 func renderPage(s *State, tok *TokenStats) string {
+	return renderPageView(s, tok, "usage")
+}
+
+func renderPageView(s *State, tok *TokenStats, view string) string {
+	pageTitle := "한도 현황"
+	switch view {
+	case "tokens":
+		pageTitle = "토큰 통계"
+	case "settings":
+		pageTitle = "설정"
+	default:
+		view = "usage"
+	}
 	var b strings.Builder
 	b.WriteString(`<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/png;base64,` + base64.StdEncoding.EncodeToString(faviconPNG) + `">
-<title>Usage Tray · 사용량</title><style>` + pageCSS + dashboardCSS + `</style></head><body>`)
+<title>Usage Tray · ` + pageTitle + `</title><style>` + pageCSS + dashboardCSS + `</style></head><body data-page="` + view + `">`)
 
 	fmt.Fprintf(&b, `<header><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
-		`<div><h1>Usage Tray</h1><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div></div></div>`+
-		`<nav class="page-nav" aria-label="화면 이동"><a href="#usage-snapshot">사용량</a><a href="/#token-details">토큰 통계</a><a href="/#settings">설정</a></nav></header>`,
-		base64.StdEncoding.EncodeToString(faviconPNG), s.Updated.Local().Format("15:04:05"))
+		`<div><h1>%s</h1><div class="meta" id="snapshot-time"><span class="dot"></span>Usage Tray · %s 갱신 · 자동 갱신</div></div></div>`+
+		`<nav class="page-nav" aria-label="화면 이동">`,
+		base64.StdEncoding.EncodeToString(faviconPNG), pageTitle, s.Updated.Local().Format("15:04:05"))
+	for _, item := range []struct{ view, path, label string }{
+		{"usage", "/", "한도 현황"}, {"tokens", "/tokens", "토큰 통계"}, {"settings", "/settings", "설정"},
+	} {
+		active := ""
+		if item.view == view {
+			active = ` aria-current="page"`
+		}
+		fmt.Fprintf(&b, `<a href="%s"%s>%s</a>`, item.path, active, item.label)
+	}
+	b.WriteString(`</nav></header>`)
 
 	b.WriteString(`<section id="usage-snapshot"><div class="row cards">`)
 	for _, c := range gaugeCards(s) {
@@ -357,9 +384,9 @@ func renderPage(s *State, tok *TokenStats) string {
 	if s.Antigravity.Available {
 		b.WriteString(`<p class="none">Antigravity는 모델별 잔여 한도와 리셋 시각을 표시합니다. 토큰 수와 과거 사용량은 제공되지 않습니다.</p>`)
 	}
-	b.WriteString(`</section>` + dashboardHTML + `<details id="token-details" class="token-details panel disclosure dashboard-full"><summary>토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></summary><section id="token-snapshot">`)
+	b.WriteString(`</section>` + dashboardHTML + `<section id="token-details" class="token-details panel dashboard-full" aria-labelledby="token-title"><h2 id="token-title">토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></h2><section id="token-snapshot">`)
 	if tok == nil {
-		b.WriteString(`<div class="panel none">토큰 집계가 아직 없습니다. 첫 스캔이 끝나면 채워집니다.</div></section></details>` + dashboardScriptTag() + `</body></html>`)
+		b.WriteString(`<div class="panel none">토큰 집계가 아직 없습니다. 첫 스캔이 끝나면 채워집니다.</div></section></section>` + dashboardScriptTag() + `</body></html>`)
 		return b.String()
 	}
 
@@ -437,9 +464,9 @@ func renderPage(s *State, tok *TokenStats) string {
 
 	fmt.Fprintf(&b, `<footer>집계 %s · %dms · 출처 Claude %s / Codex %s</footer>`,
 		tok.Updated.Local().Format("2006-01-02 15:04:05"), tok.ScanMs,
-		orDash(s.Claude.Src), orDash(s.Codex.Src))
+		html.EscapeString(orDash(s.Claude.Src)), html.EscapeString(orDash(s.Codex.Src)))
 
-	b.WriteString(`</section></details>` + dashboardScriptTag() + `</body></html>`)
+	b.WriteString(`</section></section>` + dashboardScriptTag() + `</body></html>`)
 	return b.String()
 }
 
@@ -523,7 +550,16 @@ func cardHTMLAt(c gaugeCard, now time.Time) string {
 	if c.Left >= 0 {
 		left = fmt.Sprintf(`%d%%<span>남음</span>`, c.Left)
 	}
+	// Share native tooltip formatting, then put its countdown before the date.
 	reset := clickResetDetail(Window{Left: c.Left, ResetAt: c.ResetAt}, now)
+	resetHTML := `<strong>` + html.EscapeString(reset) + `</strong>`
+	if date, remaining, ok := strings.Cut(reset, " 초기화 · "); ok {
+		if strings.HasSuffix(remaining, " 후") {
+			remaining += " 초기화"
+		}
+		resetHTML = fmt.Sprintf(`<strong>%s</strong><time datetime="%s">%s</time>`,
+			html.EscapeString(remaining), time.Unix(c.ResetAt, 0).In(now.Location()).Format(time.RFC3339), html.EscapeString(date))
+	}
 	var notes strings.Builder
 	for _, note := range c.Chips {
 		if note.Text == "" {
@@ -546,7 +582,7 @@ func cardHTMLAt(c gaugeCard, now time.Time) string {
 		`<div class="ct">%s<span class="ct-label">%s</span></div><div class="cl%s">%s</div></div>`+
 		`<div class="cs">%s</div>%s</div></div>`,
 		strings.ToLower(c.Mark.name), agentIcon(c.Mark, "sm"), html.EscapeString(c.Title),
-		cls, left, html.EscapeString(reset), info)
+		cls, left, resetHTML, info)
 }
 
 func statHTML(title string, m agentMark, pairs [][2]string) string {

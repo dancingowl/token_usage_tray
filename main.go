@@ -627,7 +627,7 @@ func onReady() {
 				case "detail":
 					openURL("http://" + listenAddr() + "/")
 				case "settings":
-					openURL("http://" + listenAddr() + "/#settings")
+					openURL("http://" + listenAddr() + "/settings")
 				}
 			case action := <-systray.ClickActionCh:
 				switch action {
@@ -637,7 +637,7 @@ func onReady() {
 				case "detail":
 					openURL("http://" + listenAddr() + "/")
 				case "settings":
-					openURL("http://" + listenAddr() + "/#settings")
+					openURL("http://" + listenAddr() + "/settings")
 				}
 			case <-tick.C:
 				// 새로 로그인한 에이전트가 있으면 반영한다(끄는 것은 재시작 때만).
@@ -658,9 +658,9 @@ func onReady() {
 			case <-systray.DClickedCh:
 				openURL("http://" + listenAddr() + "/")
 			case <-mSettings.ClickedCh:
-				openURL("http://" + listenAddr() + "/#settings")
+				openURL("http://" + listenAddr() + "/settings")
 			case <-mUpdate.ClickedCh:
-				openURL("http://" + listenAddr() + "/#updates")
+				openURL("http://" + listenAddr() + "/settings#system-details")
 			case <-mDonut.ClickedCh:
 				chooseStyle(iconStyleDonut)
 			case <-mNumber.ClickedCh:
