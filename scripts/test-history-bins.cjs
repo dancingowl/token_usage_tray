@@ -10,7 +10,7 @@ const end = source.indexOf('function attachHistoryDetails(', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
 vm.runInContext(source.slice(start, end), context);
-const { historyInterval, historyBins, historyRange, historyZoomRange, forecastResetLead } = context;
+const { historyInterval, historyBins, historyRange, historyZoomRange, forecastResetLead, usagePaceAdvice, quotaPaceLabel } = context;
 const minute = 60000, hour = 60 * minute, day = 24 * hour;
 for (const [span, expected] of [[0, minute], [5 * hour, 10 * minute], [24 * hour, 30 * minute], [7 * day, 4 * hour], [30 * day, day]]) {
  assert.equal(historyInterval(span), expected);
@@ -68,4 +68,11 @@ for(const [gap,label] of [[5*day+6*hour,'5일 6시간'],[day,'1일'],[2*hour+15*
 for(const invalid of [{}, {reset_at:0}, {reset_at:at/1000}, {reset_at:(at-minute)/1000}, {reset_at:(at+day)/1000,exhausts_before_reset:false}, {reset_at:(at+day)/1000,estimated_exhaustion:'invalid'}]) {
  assert.equal(forecastResetLead({...prediction,...invalid}), '');
 }
-console.log('PASS: interval selection, last values incl zero, immutable input, reset/window boundaries, sparse/empty/single/tied records, stable bucket alignment');
+const risky={ready:true,exhausts_before_reset:true,daily_budget:14,rate_per_day:56};
+assert.equal(usagePaceAdvice(risky).reduction,75);
+assert.equal(usagePaceAdvice({...risky,daily_budget:0}).reduction,100);
+assert.equal(usagePaceAdvice({...risky,daily_budget:60}).reduction,0);
+assert.equal(usagePaceAdvice({...risky,daily_budget:480,rate_per_day:960}).budget,480);
+for(const invalid of [null,{}, {...risky,ready:false},{...risky,exhausts_before_reset:false},{...risky,daily_budget:null},{...risky,daily_budget:undefined},{...risky,daily_budget:-1},{...risky,rate_per_day:0},{...risky,rate_per_day:Infinity}])assert.equal(usagePaceAdvice(invalid),null);
+assert.equal(quotaPaceLabel(.04),'0.1%p 미만');assert.equal(quotaPaceLabel(0),'0.0%p');
+console.log('PASS: history ranges/bins, reset lead, daily pace/reduction, unknown/zero/short-window guards');

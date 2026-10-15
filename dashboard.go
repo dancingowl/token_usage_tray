@@ -36,6 +36,7 @@ details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summ
 .dash-history-chart{width:100%;height:250px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-point{fill:transparent;stroke:none}.dash-chart-point:focus{outline:none}
 .history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
 .dash-forecast{border-left:3px solid #0f766e;padding:10px 14px;background:#f2f8f6;border-radius:8px;font-size:13px}.dash-forecast.risk{border-color:var(--bad);background:#fff5f5}.dash-forecast p{margin:4px 0}.dash-release{color:#0f766e}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
+.pace-advice{padding:3px 0 12px;margin-bottom:10px;border-bottom:1px solid #eadbdb}.pace-title{color:var(--sub);font-size:12px}.pace-target{display:block;font-size:23px;line-height:1.4;letter-spacing:-.02em;color:#202938;margin:4px 0}.pace-reduction{font-weight:650;color:#a33c3c}.pace-comparison{color:var(--tx)}.pace-note{font-size:11px;color:var(--sub)}
 body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .cl{font-size:26px}
 @media(max-width:620px){.dash-grid{grid-template-columns:1fr}.dash-form-grid{grid-template-columns:1fr}.dash-actions select{max-width:100%}.summary-note{display:none}.quick-toolbar{justify-content:flex-start}.quick-toolbar .dash-message{text-align:left}}
 @media(max-width:620px){.history-controls{grid-template-columns:1fr}.history-controls label{display:grid;grid-template-columns:60px minmax(0,1fr)}.history-controls select{width:100%}.dash-chart-labels{font-size:11px}}
@@ -244,6 +245,11 @@ function forecastResetLead(forecast) {
  const duration=days?days+'일'+(hours?' '+hours+'시간':''):hours?hours+'시간'+(minutes%60?' '+minutes%60+'분':''):minutes?minutes+'분':'1분 미만';
  return '초기화보다 약 '+duration+' 먼저 소진 예상';
 }
+function usagePaceAdvice(forecast) {
+ if(!forecast || !forecast.ready || !forecast.exhausts_before_reset || !Number.isFinite(forecast.daily_budget) || forecast.daily_budget<0 || !Number.isFinite(forecast.rate_per_day) || forecast.rate_per_day<=0)return null;
+ return {budget:forecast.daily_budget,rate:forecast.rate_per_day,reduction:Math.max(0,(1-forecast.daily_budget/forecast.rate_per_day)*100)};
+}
+function quotaPaceLabel(value) {return value>0 && value<.1?'0.1%p 미만':value.toFixed(1)+'%p';}
 function attachHistoryDetails(chart,svg,points,dots,range) {
  const tooltip=textNode('div','','history-tooltip');tooltip.id='history-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;chart.append(tooltip);
  const guide=svgElement('line',{y1:20,y2:180,stroke:'#80b5a9','stroke-dasharray':'4 4','pointer-events':'none'});
@@ -335,9 +341,17 @@ function drawHistory() {
   if(focusedAt){const target=dots.reduce((best,item)=>Math.abs(new Date(item.point.s.at)-new Date(focusedAt))<Math.abs(new Date(best.point.s.at)-new Date(focusedAt))?item:best,dots[0]);if(target)target.dot.focus({preventScroll:true});}
  }
  const forecast=(historyData.forecasts || []).find(f=>f.agent===agent && f.window===windowName), box=$('forecast-state');box.replaceChildren();box.classList.remove('risk');
- if(forecast && Number.isFinite(forecast.daily_budget))box.append(textNode('p','리셋까지 하루 권장 사용량: '+forecast.daily_budget.toFixed(1)+'%p'));
+ const pace=usagePaceAdvice(forecast);
+ if(pace){
+  const advice=textNode('div','','pace-advice');advice.append(textNode('p','초기화까지 나눠 쓰려면','pace-title'));
+  advice.append(textNode('strong',pace.budget===0?'남은 한도 없음 · 초기화까지 사용 쉬기':'하루 약 '+quotaPaceLabel(pace.budget)+(pace.budget<.1?' 사용':' 이내로 사용'),'pace-target'));
+  if(pace.reduction>0)advice.append(textNode('p','최근 사용 속도에서 약 '+(pace.reduction<1?'1% 미만':Math.round(pace.reduction)+'%')+' 줄이기','pace-reduction'));
+  advice.append(textNode('p','최근 '+quotaPaceLabel(pace.rate)+'/일 → 목표 '+quotaPaceLabel(pace.budget)+'/일','pace-comparison'));
+  if(forecast.reset_at*1000-historyData.rangeEnd<86400000 && forecast.reset_at*1000>historyData.rangeEnd && pace.budget>0)advice.append(textNode('p','초기화까지 하루 미만 · 시간당 약 '+quotaPaceLabel(pace.budget/24)+' 속도','pace-note'));
+  advice.append(textNode('p','전체 한도 100% 기준 · 잔량 80% → 70%는 10%p 사용','pace-note'));box.append(advice);
+ }else if(forecast && Number.isFinite(forecast.daily_budget))box.append(textNode('p','초기화까지 하루 권장 사용량: '+quotaPaceLabel(forecast.daily_budget)));
  if(!forecast || !forecast.ready || !Number.isFinite(forecast.rate_per_day) || forecast.rate_per_day<=0) {box.append(textNode('p',forecast && forecast.reason || '소비 속도를 계산할 기록이 부족합니다. 더 많은 기록이 쌓이면 예상치를 표시합니다.'));return;}
- box.classList.toggle('risk',!!forecast.exhausts_before_reset);box.append(textNode('p','최근 소비 속도: 하루 '+forecast.rate_per_day.toFixed(1)+'%p · '+forecast.samples+'개 기록'));
+ box.classList.toggle('risk',!!forecast.exhausts_before_reset);if(!pace)box.append(textNode('p','최근 소비 속도: 하루 '+quotaPaceLabel(forecast.rate_per_day)+' · '+forecast.samples+'개 기록'));
  if(forecast.estimated_exhaustion)box.append(textNode('p','예상 소진: '+timeLabel(forecast.estimated_exhaustion)+' · '+(forecastResetLead(forecast) || (forecast.exhausts_before_reset?'초기화 전에 소진될 가능성이 있습니다.':'현재 속도에서는 초기화 전 소진 위험이 낮습니다.'))));
 }
 async function loadHistory() {
