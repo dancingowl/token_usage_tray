@@ -28,15 +28,17 @@ func startupEnabled() (bool, bool) {
 	if target == "" {
 		return false, true
 	}
-	if info, err := os.Stat(target); err != nil || info.IsDir() {
+	targetInfo, err := os.Stat(target)
+	if err != nil || targetInfo.IsDir() {
 		return false, true
 	}
-	actual, err := filepath.Abs(target)
+	exeInfo, err := os.Stat(exe)
 	if err != nil {
 		return false, true
 	}
-	want, err := filepath.Abs(exe)
-	return err == nil && strings.EqualFold(filepath.Clean(actual), filepath.Clean(want)), true
+	// WScript may expand an 8.3 executable path to its long spelling. Compare
+	// file identity so aliases work without accepting a different executable.
+	return os.SameFile(targetInfo, exeInfo), true
 }
 
 // Only change the startup shortcut; unlike -install this never restarts the app or Explorer.

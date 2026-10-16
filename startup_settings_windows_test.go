@@ -51,3 +51,39 @@ func TestStartupShortcutRoundTripInIsolatedDirectory(t *testing.T) {
 		t.Fatal("missing shortcut target reported enabled")
 	}
 }
+
+func TestStartupShortcutRecognizesExecutableFileIdentity(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("APPDATA", root)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A hard link gives us a distinct spelling of the same file even when
+	// 8.3 short-name generation is disabled on the test volume.
+	alias := filepath.Join(root, "executable-alias.exe")
+	if err := os.Link(exe, alias); err != nil {
+		t.Fatal(err)
+	}
+	different := filepath.Join(root, "different.exe")
+	if err := os.WriteFile(different, []byte("different executable"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(startupLink()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, target string
+		want         bool
+	}{{"same file alias", alias, true}, {"different existing file", different, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			script := "$s = New-Object -ComObject WScript.Shell; $l = $s.CreateShortcut('" + psQuote(startupLink()) + "'); $l.TargetPath = '" + psQuote(tc.target) + "'; $l.Save()"
+			if err := runPS("usage-tray-test-target-identity.ps1", script); err != nil {
+				t.Fatal(err)
+			}
+			if enabled, supported := startupEnabled(); enabled != tc.want || !supported {
+				t.Fatalf("startupEnabled() = (%v, %v), want (%v, true)", enabled, supported, tc.want)
+			}
+		})
+	}
+}
