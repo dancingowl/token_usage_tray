@@ -244,8 +244,8 @@ func assertNativeCardStyle(t *testing.T, tip *trackingTooltip, dpi uintptr) {
 	}
 	var margin tooltipRect
 	pSendMessage.Call(uintptr(tip.window), 0x0400+27, 0, uintptr(unsafe.Pointer(&margin))) // TTM_GETMARGIN
-	padding := int32(14 * dpi / 96)
-	if margin != (tooltipRect{padding, padding, padding, padding + int32(48*dpi/96)}) {
+	padding := int32(12 * dpi / 96)
+	if margin != (tooltipRect{padding, padding + int32(36*dpi/96), padding, padding}) {
 		t.Fatalf("native padding mismatch at DPI %d: %v", dpi, margin)
 	}
 	handle, _, _ := pSendMessage.Call(uintptr(tip.window), 0x0031, 0, 0) // WM_GETFONT

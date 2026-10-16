@@ -65,7 +65,7 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 		return nil
 	}
 	var handles [4]windows.Handle
-	for i, font := range []tooltipLogFont{clickTooltipFont(dpi), clickCardFont(dpi, 18, 600), clickCardFont(dpi, 10, 400), clickCardFont(dpi, 10, 600)} {
+	for i, font := range []tooltipLogFont{clickTooltipFont(dpi), clickCardFont(dpi, 13, 600), clickCardFont(dpi, 10, 400), clickCardFont(dpi, 10, 500)} {
 		handle, _, err := pCreateFontIndirect.Call(uintptr(unsafe.Pointer(&font)))
 		if handle == 0 {
 			for _, allocated := range handles {
@@ -94,8 +94,10 @@ func (tip *trackingTooltip) scaleCardStyle(dpi uintptr) error {
 			pDeleteObject.Call(uintptr(oldFont))
 		}
 	}
-	padding := int32(14 * dpi / 96)
-	margin := tooltipRect{padding, padding, padding, padding + int32(48*dpi/96)}
+	padding := int32(12 * dpi / 96)
+	// Plain-text fallback reserves a header for the icon actions. Structured
+	// quota rows use their own measured layout and ignore this native margin.
+	margin := tooltipRect{padding, padding + int32(36*dpi/96), padding, padding}
 	pSendMessage.Call(uintptr(tip.window), ttmSetMargin, 0, uintptr(unsafe.Pointer(&margin)))
 	// Clear both the title and its native information glyph for every mode.
 	pSendMessage.Call(uintptr(tip.window), ttmSetTitleW, 0, 0)

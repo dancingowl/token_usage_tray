@@ -3,7 +3,6 @@
 package systray
 
 import (
-	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -71,21 +70,13 @@ func clickButtonBounds(client tooltipRect, dpi uintptr, index, count int) toolti
 	if dpi == 0 {
 		dpi = 96
 	}
-	padding, gap, height := int32(16*dpi/96), int32(4*dpi/96), int32(30*dpi/96)
-	// Refresh anchors the left edge. Detail and settings form a compact group
-	// at the right, leaving flexible space in between rather than three tiles.
-	widths := [...]int32{int32(82 * dpi / 96), int32(84 * dpi / 96), int32(54 * dpi / 96)}
-	if count != len(widths) || index < 0 || index >= len(widths) {
+	padding, gap, size := int32(12*dpi/96), int32(4*dpi/96), int32(28*dpi/96)
+	if count != 2 || index < 0 || index >= count {
 		return tooltipRect{}
 	}
-	left := client.Left + padding
-	if index > 0 {
-		left = client.Right - padding - widths[2]
-		if index == 1 {
-			left -= gap + widths[1]
-		}
-	}
-	return tooltipRect{left, client.Bottom - padding - height, left + widths[index], client.Bottom - padding}
+	left := client.Right - padding - size - int32(count-1-index)*(size+gap)
+	top := client.Top + padding
+	return tooltipRect{left, top, left + size, top + size}
 }
 
 func (tip *trackingTooltip) drawActionButton(item *clickButtonDrawItem) bool {
@@ -125,16 +116,9 @@ func (tip *trackingTooltip) drawActionButton(item *clickButtonDrawItem) bool {
 	inset := int32(stroke / 2)
 	pRoundRect.Call(uintptr(item.DC), uintptr(item.Rect.Left+inset), uintptr(item.Rect.Top+inset),
 		uintptr(item.Rect.Right-inset), uintptr(item.Rect.Bottom-inset), radius, radius)
-	if tip.font != 0 {
-		pSelectObject.Call(uintptr(item.DC), uintptr(tip.font))
+	if !drawClickActionIcon(uintptr(item.DC), item.Rect, dpi, clickCardActions[index].action, colors.text, colors.fill) {
+		return false
 	}
-	pSetBkMode.Call(uintptr(item.DC), 1) // TRANSPARENT
-	pSetTextColor.Call(uintptr(item.DC), colors.text)
-	text, _ := windows.UTF16FromString(clickCardActions[index].label)
-	textRect := item.Rect
-	pDrawText.Call(uintptr(item.DC), uintptr(unsafe.Pointer(&text[0])), uintptr(len(text)-1),
-		uintptr(unsafe.Pointer(&textRect)), 0x0001|0x0004|0x0020|0x0800) // center, vcenter, single line, no prefix
-	runtime.KeepAlive(text)
 	if item.State&0x0010 != 0 && item.State&0x0200 == 0 { // ODS_FOCUS, ODS_NOFOCUSRECT
 		inset := int32(4 * dpi / 96)
 		focus := tooltipRect{item.Rect.Left + inset, item.Rect.Top + inset, item.Rect.Right - inset, item.Rect.Bottom - inset}

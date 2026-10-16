@@ -49,7 +49,7 @@ func clickRowMetrics(dpi uintptr) clickRowsLayout {
 		dpi = 96
 	}
 	px := func(dip int32) int32 { return int32((uintptr(dip)*dpi + 48) / 96) }
-	return clickRowsLayout{width: px(360), padding: px(16), gap: px(12), firstHeight: px(34), detailHeight: px(20)}
+	return clickRowsLayout{width: px(300), padding: px(12), gap: px(8), firstHeight: px(28), detailHeight: px(20)}
 }
 
 func clickMeasureText(dc uintptr, font windows.Handle, text string) tooltipRect {
@@ -86,7 +86,7 @@ func (tip *trackingTooltip) rowCountdownFont(row ClickTooltipRow) windows.Handle
 }
 
 func (layout clickRowsLayout) rowHeight(row ClickTooltipRow) int32 {
-	height := layout.firstHeight + layout.detailHeight + layout.gap
+	height := layout.firstHeight + 2*layout.detailHeight + layout.gap
 	if row.Status != "" {
 		height += layout.detailHeight
 	}
@@ -98,6 +98,9 @@ func (tip *trackingTooltip) measureRows() clickRowsLayout {
 	dc, _, _ := pGetDC.Call(uintptr(tip.window))
 	if dc != 0 {
 		defer pReleaseDC.Call(uintptr(tip.window), dc)
+		// Keep the first value clear of the two 28 DIP header actions and their
+		// 4 DIP gap. Service labels have their own line below the reset details.
+		actions := int32((60*uintptr(clickMax32(int32(tip.fontDPI), 96)) + 48) / 96)
 		for _, row := range tip.rows {
 			label := clickMeasureText(dc, tip.font, row.Label)
 			value := clickMeasureText(dc, tip.valueFont, row.Value)
@@ -105,20 +108,23 @@ func (tip *trackingTooltip) measureRows() clickRowsLayout {
 			countdown := clickMeasureText(dc, tip.rowCountdownFont(row), left)
 			date := clickMeasureText(dc, tip.detailFont, right)
 			status := clickMeasureText(dc, tip.detailFont, row.Status)
-			layout.firstHeight = clickMax32(layout.firstHeight, label.Bottom, value.Bottom)
-			layout.detailHeight = clickMax32(layout.detailHeight, countdown.Bottom, date.Bottom, status.Bottom)
+			layout.firstHeight = clickMax32(layout.firstHeight, value.Bottom)
+			layout.detailHeight = clickMax32(layout.detailHeight, label.Bottom, countdown.Bottom, date.Bottom, status.Bottom)
 			layout.width = clickMax32(layout.width,
-				label.Right+value.Right+layout.gap+2*layout.padding+2,
+				value.Right+actions+layout.gap+2*layout.padding+2,
+				label.Right+2*layout.padding+2,
 				countdown.Right+date.Right+2*layout.padding+2,
 				status.Right+2*layout.padding+2)
 		}
 	}
-	// Each exceptional status receives its own measured line; the footer stays
-	// compact regardless of how many service quotas are visible.
-	footer := int32(30 * uintptr(clickMax32(int32(tip.fontDPI), 96)) / 96)
-	layout.height = 2*layout.padding + footer + 2
+	// Each quota has a value, reset information, and service label. Exceptional
+	// statuses add one more line; the only actions are in the first header.
+	layout.height = 2*layout.padding + 2
 	for _, row := range tip.rows {
 		layout.height += layout.rowHeight(row)
+	}
+	if len(tip.rows) > 0 {
+		layout.height -= layout.gap
 	}
 	return layout
 }
@@ -151,14 +157,14 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 	pSetBkMode.Call(dc, 1)
 	layout := tip.rowLayout
 	y := client.Top + layout.padding
-	for _, row := range tip.rows {
-		value := clickMeasureText(dc, tip.valueFont, row.Value)
+	for index, row := range tip.rows {
 		first := tooltipRect{client.Left + layout.padding, y, client.Right - layout.padding, y + layout.firstHeight}
-		label := first
-		label.Left += value.Right + layout.gap
+		if index == 0 {
+			actions := clickButtonBounds(client, tip.fontDPI, 0, len(tip.buttons))
+			first.Right = actions.Left - layout.gap
+		}
 		clickDrawRowText(dc, tip.valueFont, row.Value, first, clickRowValueColor(row.Remaining), 0)
-		clickDrawRowText(dc, tip.font, row.Label, label, clickTipDetailColor, 0x0002)
-		detail := tooltipRect{first.Left, first.Bottom, first.Right, first.Bottom + layout.detailHeight}
+		detail := tooltipRect{client.Left + layout.padding, first.Bottom, client.Right - layout.padding, first.Bottom + layout.detailHeight}
 		left, right := clickRowSecondLine(row)
 		countdownWidth := clickMeasureText(dc, tip.rowCountdownFont(row), left).Right
 		if left == "" {
@@ -174,18 +180,13 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 		}
 		clickDrawRowText(dc, tip.rowCountdownFont(row), left, countdown, countdownColor, 0)
 		clickDrawRowText(dc, tip.detailFont, right, date, clickTipDetailColor, 0)
+		detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
+		clickDrawRowText(dc, tip.font, row.Label, detail, clickTipDetailColor, 0)
 		if row.Status != "" {
 			detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
 			clickDrawRowText(dc, tip.detailFont, row.Status, detail, clickTipDetailColor, 0)
 		}
 		y = detail.Bottom + layout.gap
-	}
-	// A quiet rule separates the summary from its ghost actions.
-	rule := tooltipRect{client.Left + layout.padding, y - layout.gap/2, client.Right - layout.padding, y - layout.gap/2 + 1}
-	border, _, _ := pCreateSolidBrush.Call(clickTipBorderColor)
-	if border != 0 {
-		pFillRect.Call(dc, uintptr(unsafe.Pointer(&rule)), border)
-		pDeleteObject.Call(border)
 	}
 	return true
 }

@@ -31,7 +31,7 @@ var (
 func init() { clickCardSubclass = windows.NewCallback(clickCardSubclassProc) }
 
 var clickCardActions = [...]struct{ label, action string }{
-	{"새로고침", "refresh"}, {"상세 보기", "detail"}, {"설정", "settings"},
+	{"새로고침", "refresh"}, {"설정", "settings"},
 }
 
 // SetWindowSubclass must be called on the owning window thread. Win32 retains

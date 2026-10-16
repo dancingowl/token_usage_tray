@@ -424,7 +424,7 @@ func (t *winTray) showClickTooltip(cursor point) error {
 		tip.rowLayout = tip.measureRows()
 		width, height = tip.rowLayout.width, tip.rowLayout.height
 	}
-	minWidth := int32(340 * dpi / 96)
+	minWidth := int32(300 * dpi / 96)
 	if width < minWidth {
 		width = minWidth
 	}

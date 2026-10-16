@@ -157,14 +157,14 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 		for i, font := range []windows.Handle{tip.font, tip.valueFont, tip.detailFont, tip.countdownFont} {
 			var got tooltipLogFont
 			g32.NewProc("GetObjectW").Call(uintptr(font), unsafe.Sizeof(got), uintptr(unsafe.Pointer(&got)))
-			want := []tooltipLogFont{clickCardFont(dpi, 10, 400), clickCardFont(dpi, 18, 600), clickCardFont(dpi, 10, 400), clickCardFont(dpi, 10, 600)}[i]
+			want := []tooltipLogFont{clickCardFont(dpi, 10, 400), clickCardFont(dpi, 13, 600), clickCardFont(dpi, 10, 400), clickCardFont(dpi, 10, 500)}[i]
 			if got != want {
 				t.Fatalf("DPI %d font %d differs", dpi, i)
 			}
 		}
 		tip.rowLayout = tip.measureRows()
 		layout := tip.rowLayout
-		if layout.width < int32(360*dpi/96) || layout.padding != int32((16*dpi+48)/96) || layout.gap != int32((12*dpi+48)/96) {
+		if layout.width < int32(300*dpi/96) || layout.padding != int32((12*dpi+48)/96) || layout.gap != int32((8*dpi+48)/96) {
 			t.Fatal("DPI geometry incorrect")
 		}
 		dc, _, _ := pGetDC.Call(uintptr(tip.window))
@@ -175,7 +175,7 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 			detail := clickMeasureText(dc, tip.rowCountdownFont(row), left)
 			date := clickMeasureText(dc, tip.detailFont, right)
 			status := clickMeasureText(dc, tip.detailFont, row.Status)
-			if label.Right+value.Right+layout.gap+2*layout.padding+2 > layout.width || detail.Right+date.Right+2*layout.padding+2 > layout.width || status.Right+2*layout.padding+2 > layout.width {
+			if value.Right+int32(60*dpi/96)+layout.gap+2*layout.padding+2 > layout.width || label.Right+2*layout.padding+2 > layout.width || detail.Right+date.Right+2*layout.padding+2 > layout.width || status.Right+2*layout.padding+2 > layout.width {
 				t.Fatal("long quota/date clips")
 			}
 		}
@@ -189,7 +189,7 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 		longDetail := clickMeasureText(dc, tip.countdownFont, tip.rows[0].Countdown)
 		longDate := clickMeasureText(dc, tip.detailFont, " · "+tip.rows[0].ResetDate)
 		longStatus := clickMeasureText(dc, tip.detailFont, tip.rows[0].Status)
-		if longLabel.Right+longValue.Right+longLayout.gap+2*longLayout.padding+2 > longLayout.width || longDetail.Right+longDate.Right+2*longLayout.padding+2 > longLayout.width || longStatus.Right+2*longLayout.padding+2 > longLayout.width {
+		if longValue.Right+int32(60*dpi/96)+longLayout.gap+2*longLayout.padding+2 > longLayout.width || longLabel.Right+2*longLayout.padding+2 > longLayout.width || longDetail.Right+longDate.Right+2*longLayout.padding+2 > longLayout.width || longStatus.Right+2*longLayout.padding+2 > longLayout.width {
 			t.Fatal("long model label or year clips")
 		}
 		tip.rows = previewRows
@@ -227,17 +227,21 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 			}
 		}
 	}
+	// Warm native button painting before checking repeat paints for GDI growth.
+	// The first two paints can realize a process-local GDI object lazily.
 	render()
+	render()
+	g32.NewProc("GdiFlush").Call()
 	process, _, _ := k32.NewProc("GetCurrentProcess").Call()
 	before, _, _ := u32.NewProc("GetGuiResources").Call(process, 0)
 	for i := 0; i < 30; i++ {
 		render()
 	}
+	g32.NewProc("GdiFlush").Call()
 	after, _, _ := u32.NewProc("GetGuiResources").Call(process, 0)
 	if after > before {
 		t.Fatalf("row paints leaked %d GDI objects", after-before)
 	}
-	g32.NewProc("GdiFlush").Call()
 	bytes := make([]byte, width*height*4)
 	var read uintptr
 	if err := windows.ReadProcessMemory(windows.CurrentProcess(), pixels, &bytes[0], uintptr(len(bytes)), &read); err != nil || read != uintptr(len(bytes)) {

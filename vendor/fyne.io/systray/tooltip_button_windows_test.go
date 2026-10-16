@@ -108,24 +108,32 @@ func TestClickButtonWin32StructLayouts(t *testing.T) {
 	}
 }
 
-func TestThreeClickActionsAndDPILayout(t *testing.T) {
-	if len(clickCardActions) != 3 || clickCardActions[0].action != "refresh" || clickCardActions[1].action != "detail" || clickCardActions[2].action != "settings" {
-		t.Fatal("summary must expose refresh, detail, settings in that order")
+func TestTwoClickActionsAndDPILayout(t *testing.T) {
+	if len(clickCardActions) != 2 || clickCardActions[0].action != "refresh" || clickCardActions[1].action != "settings" || clickCardActions[0].label != "새로고침" || clickCardActions[1].label != "설정" {
+		t.Fatal("summary must expose refresh and settings with native accessible labels")
 	}
-	for _, dpi := range []uintptr{96, 120, 144, 192} {
-		client := tooltipRect{0, 0, int32(340 * dpi / 96), int32(300 * dpi / 96)}
-		padding, gap := int32(16*dpi/96), int32(4*dpi/96)
+	for _, dpi := range []uintptr{0, 96, 120, 144, 192} {
+		actualDPI := dpi
+		if actualDPI == 0 {
+			actualDPI = 96
+		}
+		client := tooltipRect{5, 7, int32(340 * actualDPI / 96), int32(300 * actualDPI / 96)}
+		padding, gap, size := int32(12*actualDPI/96), int32(4*actualDPI/96), int32(28*actualDPI/96)
 		refresh := clickButtonBounds(client, dpi, 0, len(clickCardActions))
-		detail := clickButtonBounds(client, dpi, 1, len(clickCardActions))
-		settings := clickButtonBounds(client, dpi, 2, len(clickCardActions))
-		if refresh.Left != padding || settings.Right != client.Right-padding || settings.Left-detail.Right != gap || detail.Left-refresh.Right <= gap {
-			t.Fatalf("DPI %d footer lost its left/right grouping", dpi)
+		settings := clickButtonBounds(client, dpi, 1, len(clickCardActions))
+		if settings.Right != client.Right-padding || settings.Left-refresh.Right != gap {
+			t.Fatalf("DPI %d icons lost their top-right grouping", dpi)
 		}
 		for i := range clickCardActions {
 			bounds := clickButtonBounds(client, dpi, i, len(clickCardActions))
-			if bounds.Bottom-bounds.Top != int32(30*dpi/96) || bounds.Bottom != client.Bottom-padding {
+			if bounds.Bottom-bounds.Top != size || bounds.Right-bounds.Left != size || bounds.Top != client.Top+padding {
 				t.Fatalf("DPI %d button %d has inconsistent bounds %+v", dpi, i, bounds)
 			}
+		}
+	}
+	for _, args := range [][2]int{{-1, 2}, {2, 2}, {0, 3}, {0, 0}} {
+		if got := clickButtonBounds(tooltipRect{}, 96, args[0], args[1]); got != (tooltipRect{}) {
+			t.Fatalf("invalid index/count %v yielded %+v", args, got)
 		}
 	}
 }
@@ -174,7 +182,7 @@ func TestNativeClickButtonPaintingAndLifetime(t *testing.T) {
 	}
 	tray.clickTooltip = tip
 	defer tray.destroyClickTooltip()
-	const width, height = 340, 204
+	const width, height = 340, 252
 	dc, _, _ := pCreateCompatibleDC.Call(0)
 	if dc == 0 {
 		t.Fatal("create bitmap DC")
@@ -206,7 +214,7 @@ func TestNativeClickButtonPaintingAndLifetime(t *testing.T) {
 		offset := (int(y)*width + int(x)) * 4
 		return uintptr(bytes[offset+2]) | uintptr(bytes[offset+1])<<8 | uintptr(bytes[offset])<<16
 	}
-	states := []uint32{0, 0, 1, 4}
+	states := []uint32{0, 0, 1, 4, 16}
 	render := func() {
 		for row, state := range states {
 			for i, button := range tip.buttons {
@@ -214,7 +222,7 @@ func TestNativeClickButtonPaintingAndLifetime(t *testing.T) {
 				if row == 1 || row == 2 {
 					tip.hovered = button
 				}
-				bounds := clickButtonBounds(tooltipRect{0, 0, width, int32(56 + row*48)}, 96, i, len(tip.buttons))
+				bounds := clickButtonBounds(tooltipRect{0, int32(row * 48), width, height}, 96, i, len(tip.buttons))
 				item := clickButtonDrawItem{Type: 4, ID: uint32(0x7100 + i), Action: 1, State: state, Window: button, DC: windows.Handle(dc), Rect: bounds}
 				var written uintptr
 				if err := windows.WriteProcessMemory(windows.CurrentProcess(), itemMemory, (*byte)(unsafe.Pointer(&item)), unsafe.Sizeof(item), &written); err != nil || written != unsafe.Sizeof(item) {
@@ -228,8 +236,39 @@ func TestNativeClickButtonPaintingAndLifetime(t *testing.T) {
 				if err := windows.ReadProcessMemory(windows.CurrentProcess(), pixels, &bytes[0], uintptr(len(bytes)), &read); err != nil || read != uintptr(len(bytes)) {
 					t.Fatalf("read native bitmap pixels: bytes=%d error=%v", read, err)
 				}
-				if got, want := pixel(bounds.Left+8, bounds.Top+8), clickButtonColors(state, row == 1 || row == 2).fill; got != want {
+				palette := clickButtonColors(state, row == 1 || row == 2)
+				if got, want := pixel(bounds.Left+3, bounds.Top+14), palette.fill; got != want {
 					t.Fatalf("state %d fill pixel %#x, want %#x", row, got, want)
+				}
+				inkPixels, edgePixels := 0, 0
+				for y := bounds.Top + 5; y < bounds.Bottom-5; y++ {
+					for x := bounds.Left + 5; x < bounds.Right-5; x++ {
+						got := pixel(x, y)
+						if got == palette.text {
+							inkPixels++
+						} else if got != palette.fill {
+							edgePixels++
+							for shift := uint(0); shift < 24; shift += 8 {
+								channel := got >> shift & 255
+								ink, fill := palette.text>>shift&255, palette.fill>>shift&255
+								if ink > fill {
+									ink, fill = fill, ink
+								}
+								if channel < ink || channel > fill {
+									t.Fatalf("state %d icon %d edge %#x did not blend its palette", row, i, got)
+								}
+							}
+						}
+					}
+				}
+				if inkPixels < 20 || inkPixels > 150 {
+					t.Fatalf("state %d icon %d has implausible outline pixel count %d", row, i, inkPixels)
+				}
+				if edgePixels < 10 {
+					t.Fatalf("state %d icon %d lost antialiased pixels: %d", row, i, edgePixels)
+				}
+				if pixel(bounds.Left+14, bounds.Top+14) != palette.fill {
+					t.Fatalf("state %d icon %d center must stay hollow", row, i)
 				}
 				if pixel(bounds.Left, bounds.Top) != clickTipBackground {
 					t.Fatal("rounded corner was not cleared to card background")
