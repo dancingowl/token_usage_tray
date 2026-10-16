@@ -149,6 +149,7 @@ type trackingTooltip struct {
 	hovered       windows.Handle
 	pressed       windows.Handle
 	dismissAt     time.Time
+	dismiss       clickDismissState
 	anchor        point
 }
 
@@ -229,6 +230,7 @@ func (t *winTray) handleClickTimer(id uintptr) {
 	pKillTimer.Call(uintptr(t.window), id)
 	if hide {
 		if tip := t.clickTooltip; tip != nil && tip.visible {
+			t.refreshClickIconRect()
 			var cursor point
 			var rect tooltipRect
 			cursorOK, _, _ := pGetCursorPos.Call(uintptr(unsafe.Pointer(&cursor)))
@@ -441,6 +443,9 @@ func (t *winTray) showClickTooltip(cursor point) error {
 		t.hideClickTooltip()
 		return err
 	}
+	if err := t.startClickOutsideWatch(); err != nil {
+		log.Printf("systray error: %s", err)
+	}
 	return nil
 }
 
@@ -469,6 +474,7 @@ func (t *winTray) refreshVisibleClickTooltip() {
 }
 
 func (t *winTray) hideClickTooltip() {
+	t.stopClickOutsideWatch()
 	if id := t.clicks.hideTimer; id != 0 {
 		t.clicks.hideTimer = 0
 		pKillTimer.Call(uintptr(t.window), id)

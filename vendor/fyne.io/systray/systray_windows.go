@@ -334,6 +334,8 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		}
 	case wmClickSummaryChanged:
 		t.refreshVisibleClickTooltip()
+	case wmClickOutside:
+		t.dismissClickOutside(wParam)
 	case WM_COMMAND:
 		menuItemId := int32(wParam)
 		// https://docs.microsoft.com/en-us/windows/win32/menurc/wm-command#menus

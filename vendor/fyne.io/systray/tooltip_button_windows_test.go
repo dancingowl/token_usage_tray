@@ -261,14 +261,20 @@ func TestNativeClickButtonPaintingAndLifetime(t *testing.T) {
 						}
 					}
 				}
-				if inkPixels < 20 || inkPixels > 150 {
+				// At 16 DIP, most thin outline pixels have partial alpha.
+				if inkPixels < 8 || inkPixels+edgePixels < 40 || inkPixels+edgePixels > 150 {
 					t.Fatalf("state %d icon %d has implausible outline pixel count %d", row, i, inkPixels)
 				}
 				if edgePixels < 10 {
 					t.Fatalf("state %d icon %d lost antialiased pixels: %d", row, i, edgePixels)
 				}
-				if pixel(bounds.Left+14, bounds.Top+14) != palette.fill {
-					t.Fatalf("state %d icon %d center must stay hollow", row, i)
+				// The smaller circle's inner edge can lightly antialias its center.
+				center := pixel(bounds.Left+14, bounds.Top+14)
+				for shift := uint(0); shift < 24; shift += 8 {
+					delta := int(center>>shift&255) - int(palette.fill>>shift&255)
+					if delta < -8 || delta > 8 {
+						t.Fatalf("state %d icon %d center must stay hollow: %#x, fill %#x", row, i, center, palette.fill)
+					}
 				}
 				if pixel(bounds.Left, bounds.Top) != clickTipBackground {
 					t.Fatal("rounded corner was not cleared to card background")

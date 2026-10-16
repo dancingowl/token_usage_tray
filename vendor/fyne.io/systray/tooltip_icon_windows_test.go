@@ -109,7 +109,7 @@ func TestNativeActionIconDPIAndDCState(t *testing.T) {
 				t.Fatal("read icon pixels", err)
 			}
 			ink, edges, different := 0, 0, false
-			iconSize := int32(20 * actualDPI / 96)
+			iconSize := int32(16 * actualDPI / 96)
 			iconLeft, iconTop := bounds.Left+(size-iconSize)/2, bounds.Top+(size-iconSize)/2
 			for y := int32(0); y < height; y++ {
 				for x := int32(0); x < width; x++ {
@@ -118,7 +118,7 @@ func TestNativeActionIconDPIAndDCState(t *testing.T) {
 					if color != clickTipBackground {
 						ink++
 						if x < iconLeft || x >= iconLeft+iconSize || y < iconTop || y >= iconTop+iconSize {
-							t.Fatalf("DPI %d icon escaped its 20-DIP bounds", dpi)
+							t.Fatalf("DPI %d icon escaped its 16-DIP bounds", dpi)
 						}
 						if color != clickTipTextColor {
 							edges++
