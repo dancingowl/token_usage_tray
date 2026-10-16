@@ -104,8 +104,8 @@ func drawClickActionIcon(dc uintptr, bounds tooltipRect, dpi uintptr, action str
 		dpi = 96
 	}
 	// Divide before multiplying so even an invalid, very large DPI cannot
-	// overflow uintptr. The 20-DIP icon sits inside the 28-DIP native button.
-	size := int(dpi/96)*20 + int(dpi%96)*20/96
+	// overflow uintptr. The 16-DIP icon sits inside the 28-DIP native button.
+	size := int(dpi/96)*16 + int(dpi%96)*16/96
 	if size <= 0 || int64(size) > int64(bounds.Right)-int64(bounds.Left) || int64(size) > int64(bounds.Bottom)-int64(bounds.Top) {
 		return false
 	}
