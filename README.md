@@ -1,218 +1,68 @@
-# usage_tray
+# Usage Tray · token_usage_tray
 
-Claude Code · Codex · Antigravity 의 남은 사용량을 **작업표시줄(Windows) · 메뉴바(macOS)** 에 띄운다.
+Claude Code·Codex·Antigravity의 **남은 사용 한도와 초기화 시각**을 Windows 작업표시줄 또는 macOS 메뉴바에서 확인하는 앱입니다. 브라우저 상세 화면에서는 한도 이력, 사용 계획, 로컬 기록 기반 토큰 통계를 제공합니다.
 
-- 링 길이가 남은 %, 20% 밑이면 빨강. 색이 어느 에이전트인지 알려 준다
-- **윈도우는 에이전트마다 링 하나**, **맥은 링 하나에 가장 급한 에이전트** ([왜 다른가](#아이콘-개수가-os-마다-다른-이유))
-- 마우스를 올리면 창별 남은량과 리셋 시각, 클릭하면 전부 합친 상세 화면(브라우저)
-- 남은량이 임계값을 넘으면 알림 한 번, 창이 초기화돼 다시 쓸 수 있게 되면 또 한 번
-- **쓰는 에이전트만 나온다.** 하나도 없으면 실행되지 않는다
+[inging88/usage_tray](https://github.com/inging88/usage_tray)를 원작자의 허락을 받아 [dancingowl/token_usage_tray](https://github.com/dancingowl/token_usage_tray)라는 독립 저장소로 옮겼습니다. 기존 코드와 커밋 이력, 원본 프로젝트에 대한 출처를 보존합니다.
 
-바뀐 점과 연결 조건은 [UPGRADE.md](UPGRADE.md) 를 먼저 읽는다.
+## 지원 환경
 
-설치 과정도 설정 파일도 없다. 이미 로그인해 둔 자격증명을 읽을 뿐이고, 자기 계정의 자기
-사용량만 보인다.
+| 환경 | 연결 서비스 | 아이콘과 배포 형식 |
+|---|---|---|
+| Windows | Claude Code, Codex | 서비스별 트레이 아이콘 · x64 단일 `usage-tray.exe` |
+| macOS | Claude Code, Codex, Antigravity | 통합 메뉴바 아이콘 · Apple Silicon/Intel 유니버설 `UsageTray.app` |
 
-## 다운로드
+이미 로그인한 서비스의 자격증명을 읽으므로 앱에서 별도로 로그인할 필요는 없습니다. 연결 가능한 서비스가 하나도 없으면 종료합니다. Antigravity 연결은 macOS에서만 지원합니다.
 
-[Releases](https://github.com/inging88/usage_tray/releases) 에서 자기 OS 파일을 받는다.
+실행 파일에는 Go나 Node.js 설치가 필요하지 않습니다. **소스 빌드에는 Go 1.26 이상**이 필요하고, macOS에는 Xcode Command Line Tools도 필요합니다. 지원 OS는 빌드한 Go 버전의 요구사항을 따릅니다. 자세한 조건은 [개발 문서](docs/development.md)를 참고하세요.
 
-| OS | 파일 |
-|---|---|
-| Windows | `usage-tray.exe` |
-| macOS | `UsageTray-macos-universal.zip` |
+## 빠른 시작
 
----
+아래 예시는 저장소의 기본 브랜치 **`main`**을 사용합니다. 배포 파일은 [Releases](https://github.com/dancingowl/token_usage_tray/releases)에 공개된 버전을 확인하고, 릴리스가 없으면 소스에서 빌드합니다.
 
-# Windows
+### Windows에서 빌드하고 실행
 
-## 설치 — 한 줄
-
-`usage-tray.exe` 를 **계속 둘 폴더**에 놓고(경로가 바뀌면 다시 걸어야 한다) 한 줄만 친다.
+Git과 Go를 설치한 뒤 PowerShell에서 실행합니다.
 
 ```powershell
-# PowerShell 은 현재 폴더를 PATH 로 찾지 않는다 — `.\` 를 붙이거나 전체 경로를 쓴다
-.\usage-tray.exe -install
+git clone --branch main https://github.com/dancingowl/token_usage_tray.git
+cd token_usage_tray
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Run
 ```
 
-이 한 줄이 셋을 한다.
+결과는 `dist\usage-tray.exe`입니다. 이후에는 이 파일을 실행하면 됩니다. `-Run`을 빼면 빌드만 하며, 일반 실행은 로그인 자동 실행을 등록하지 않습니다.
 
-1. 시작프로그램에 바로가기를 만든다 → 다음 로그인부터 저절로 뜬다
-2. 아이콘을 오버플로(∧)에서 작업표시줄로 꺼낸다(`IsPromoted=1`)
-3. 트레이를 지금 띄운다
+### macOS에서 빌드하고 실행
 
-떼려면 `.\usage-tray.exe -uninstall`. 자동 실행만 떼고 아이콘 설정은 건드리지 않는다.
-
-"Windows 의 PC 보호" 가 뜨면 `추가 정보` → `실행` — 서명이 없어서 나는 경고다.
-
-## 어떻게 동작하나
-
-새 트레이 아이콘은 기본으로 오버플로 안에 숨는다. Windows 11 은 아이콘별 표시 여부를
-`HKCU\Control Panel\NotifyIconSettings\<id>\IsPromoted` 로 기억한다(`<id>` 는 실행 파일 경로
-해시라 각 항목의 `ExecutablePath` 로 찾는다). 그 항목은 아이콘이 한 번 뜬 뒤에야 생기므로,
-`-install` 은 항목이 없으면 앱을 먼저 띄워 만들고 기다린다.
-
-**순서가 핵심이다.** 값을 먼저 박고 트레이를 새로 띄우면 셸이 아이콘 등록 시점에 그 값을 읽어
-바로 작업표시줄에 올린다 — explorer 를 재시작할 일이 없다. 값만 따로 넣으려면 `-promote`,
-셸이 값을 안 읽는 드문 경우에만 `-promote -restart-explorer`(작업표시줄이 몇 초 사라진다).
-
-손으로 하려면 설정 → 개인 설정 → 작업 표시줄 → 시스템 트레이 아이콘에서 켜거나,
-오버플로를 열어 아이콘을 작업표시줄로 끌어다 놓는다.
-
-## 직접 빌드
-
-Go 1.26+ 만 있으면 된다. 컴파일러는 필요 없다(`CGO_ENABLED=0`).
-
-```powershell
-git clone https://github.com/inging88/usage_tray.git
-cd usage_tray
-powershell -ExecutionPolicy Bypass -File build.ps1 -Run
-```
-
-앱 아이콘은 `rsrc_windows.syso` 로 exe 에 박혀 있다(리포에 들어 있어 그냥 빌드하면 된다).
-그림을 바꾸려면 `assets/icon.png` 를 갈아 끼우고 `assets/icon.ico` · `assets/favicon32.png`
-를 다시 만든 뒤 아래를 한 번 돌린다.
-
-```powershell
-go run github.com/akavel/rsrc@latest -ico assets\icon.ico -arch amd64 -o rsrc_windows.syso
-```
-
-## 파일이 놓이는 곳
-
-`%LOCALAPPDATA%\usage-tray\` — 에이전트마다 갈라 띄우므로 `state-<agent>.json` ·
-`status-<agent>.txt` · `tokens-<agent>.json` 과 `usage-tray.log` 다. 지울 때는 실행 파일과
-이 폴더만 삭제하면 된다. `USAGE_TRAY_DATA_DIR` 을 주면 그 폴더를 대신 쓴다(검증용).
-
----
-
-# macOS
-
-## 실행
+Git·Go·Xcode Command Line Tools가 설치된 macOS 터미널에서 실행합니다.
 
 ```bash
-unzip UsageTray-macos-universal.zip
-xattr -dr com.apple.quarantine UsageTray.app   # 서명이 ad-hoc 이라 한 번 필요하다
-mv UsageTray.app /Applications/               # 계속 둘 자리로 옮긴다
-/Applications/UsageTray.app/Contents/MacOS/usage-tray -install
-```
-
-마지막 줄이 로그인 항목에 등록하고 앱을 띄운다. 메뉴바에 링이 생기고, Dock 아이콘은 없다
-(`LSUIElement`). 처음 한 번 맥이 **'시스템 이벤트' 제어 권한**을 물으면 허용한다 — 로그인
-항목을 넣는 데 필요하다. 거절했다면 시스템 설정 → 개인정보 보호 및 보안 → 자동화 에서 켠다.
-
-떼려면 `-uninstall`. 앱을 옮겼다면 새 자리에서 `-install` 을 다시 한 번 돌린다(옛 항목은
-자동으로 지운다).
-
-손으로 하려면 시스템 설정 → 일반 → 로그인 항목 → `+` → `UsageTray.app`
-
-## 직접 빌드
-
-**맥에서 빌드해야 한다.** 메뉴바(NSStatusItem)가 Cocoa API 라 cgo 를 거치고, cgo 는 크로스
-빌드가 안 된다. Xcode Command Line Tools 만 있으면 된다 — `xcode-select --install`.
-
-```bash
-git clone https://github.com/inging88/usage_tray.git
-cd usage_tray
-./build.sh          # dist/UsageTray.app (arm64 + amd64 유니버설)
+git clone --branch main https://github.com/dancingowl/token_usage_tray.git
+cd token_usage_tray
+bash ./build.sh
 open dist/UsageTray.app
 ```
 
-`build.sh` 가 `assets/icon.png` 에서 `AppIcon.icns` 를 구워 번들에 넣는다(`sips` · `iconutil`
-둘 다 맥 기본 도구다). Finder·로그인 항목에 뜨는 그림이고, 메뉴바 링과는 무관하다.
+다운로드한 앱의 실행, 로그인 자동 실행, 종료 방법은 [사용법](docs/usage.md), 실행이 차단되거나 아이콘이 보이지 않으면 [문제 해결](docs/troubleshooting.md)을 참고하세요.
 
-## 파일이 놓이는 곳
+## 주요 기능
 
-`~/Library/Application Support/usage-tray/` — 맥은 한 프로세스로 도니 접미사 없이
-`state.json` · `status.txt` · `tokens.json` · `usage-tray.log` 다.
+- **빠른 한도 확인:** 도넛 또는 숫자로 잔량을 표시합니다. Windows에서는 한 번 클릭해 요약을, 더블클릭해 상세 화면을 엽니다.
+- **한도 이력:** 최근 1일·7일·30일을 보고 실제 기록이 있는 구간을 확대합니다.
+- **사용 계획:** 관측 사용량과 하루 환산 속도를 구분하고, 초기화까지의 하루 예산과 현재 속도 유지 시 예상 소진 시점을 보여 줍니다.
+- **토큰 통계:** 로컬 대화 기록에서 일별·모델별·프로젝트별 토큰 수를 집계합니다. 잔여 한도 비율과는 별도 정보입니다.
+- **설정과 알림:** 표시할 서비스·아이콘·알림·로그인 자동 실행을 설정하고 공통 저장 버튼으로 적용합니다.
 
-## 맥에서만 걸리는 것
+## 문서
 
-Claude 자격증명이 Keychain 에 있을 수 있다. 파일에서 못 찾으면 후보 서비스명
-(`Claude Code-credentials` · `Claude Code` · `claude-code`)을 시도한다. 그래도 안 되면:
-
-```bash
-security dump-keychain | grep -i -A2 claude | head -20
-export USAGE_TRAY_CLAUDE_KEYCHAIN_SERVICE="찾은 이름"
-```
-
----
-
-# 공통
-
-## 값은 어디서 오나
-
-| 에이전트 | 엔드포인트 |
+| 문서 | 내용 |
 |---|---|
-| Claude | `api.anthropic.com/api/oauth/usage` |
-| Codex | `chatgpt.com/backend-api/codex/usage` |
-| Antigravity | 로컬에서 도는 Antigravity 언어 서버 (`127.0.0.1` 루프백, macOS 만) |
+| [사용법](docs/usage.md) | 실행·트레이 조작·상세 화면·설정·알림·데이터 위치 |
+| [개발](docs/development.md) | 빌드·테스트·아이콘 재생성·vendor 확장·버전과 CI |
+| [문제 해결](docs/troubleshooting.md) | 실행 차단·아이콘·로그인·갱신 지연·진단·삭제 |
+| [과거 macOS 확장판 기록](UPGRADE.md) | 기존 1.1.0 확장판의 변경 배경과 연결 조건 |
 
-Claude · Codex 는 비공개 경로다. 실패하면 로컬 기록으로 폴백하고 화면에 출처를 표시한다.
-Antigravity 는 앱이 떠 있을 때만 잡히고, 자격증명을 루프백 밖으로 보내지 않으며 리디렉션도
-따르지 않는다. 모델별 잔여 한도만 읽고 토큰 수나 과거 사용량은 수집하지 않는다.
+## 데이터와 출처
 
-호출은 아낀다 — statusline 이 받아 둔 캐시가 2분 이내면 그걸 쓰고, 직접 부를 때도 최소
-간격(Claude 3분 · Codex 2분)을 지키며, 429 를 받으면 5분부터 두 배씩 최대 30분 쉰다.
-실패해도 화면을 비우지 않고 직전 정상값에 나이를 붙인다.
+Claude·Codex의 사용 한도는 서비스의 비공개 조회 경로에, Antigravity는 실행 중인 로컬 앱에 의존합니다. 서비스 변경으로 조회가 실패하면 화면에 출처와 상태를 표시합니다. [연결 조건과 데이터 설명](docs/usage.md)을 확인하세요.
 
-## 자격증명을 찾는 자리
-
-| | Windows | macOS |
-|---|---|---|
-| Claude | `%LOCALAPPDATA%\Claude Code\credentials.json` → `~\.claude\.credentials.json` | `~/.claude/.credentials.json` → `~/Library/Application Support/Claude Code/credentials.json` → Keychain |
-| Codex | `~\.codex\auth.json` | `~/.codex/auth.json` |
-
-`CLAUDE_CODE_OAUTH_TOKEN` 이 있으면 그게 우선이고, `CLAUDE_CONFIG_DIR` 을 주면 `~/.claude`
-대신 그 폴더를 본다.
-
-맥에서는 파일과 Keychain 에서 못 찾으면 Claude 데스크톱 앱의 OAuth 캐시
-(`~/Library/Application Support/Claude/config.json`)를 마지막으로 본다. Electron safeStorage
-로 잠긴 **지정된 필드만** 메모리에서 푼다 — 브라우저 쿠키나 Keychain 전체를 뒤지지 않고,
-복호화 키와 토큰은 파일에도 로그에도 남기지 않는다. macOS 가 `Claude Safe Storage` 접근을
-물으면 허용해야 한다. 그마저 막히면 같은 앱의 24시간 이내 사용 기록
-(`plan-usage-history.json`)을 '앱 기록' 으로 표시한다 — 실시간 조회가 아니고 리셋 시각이
-없어 미확인으로 나온다.
-
-## 아이콘 개수가 OS 마다 다른 이유
-
-트레이 API 는 프로세스당 아이콘 1개만 준다. 링을 여러 개 내려면 프로세스를 갈라야 한다.
-
-**윈도우는 가른다.** 실행 파일이 자기 자신을 `-only claude` · `-only codex` 로 띄우고 부모는
-빠진다. 작업표시줄에는 아이콘이 나란히 붙어도 문제가 없고, 에이전트마다 링 하나가 한눈에
-낫다. 상세 화면은 어느 쪽을 눌러도 전부 합쳐 보여 준다
-(claude 47113 · codex 47114 · antigravity 47115).
-
-**맥은 못 가른다.** `.app` 본체가 자식을 띄우고 빠지는 순간 LaunchServices 가 앱이 끝난 것으로
-보고, 번들 밖에서 도는 자식은 `NSStatusItem` 을 못 얻는다 — 메뉴바에 **아무것도 안 뜬다.**
-0.3.0 이전 맥 빌드가 실행은 되는데 메뉴바가 비어 있던 이유가 이것이다. 그래서 맥은 한
-프로세스가 링 하나를 띄우고 그 링에 **남은량이 가장 적은** 에이전트를 그린다. 툴팁과 상세
-화면(47113)에는 쓰는 에이전트를 모두 담는다.
-
-어느 쪽이든 `-only` 로 띄우면 그 에이전트 하나만 맡는다.
-
-## 플래그
-
-| 플래그 | 하는 일 |
-|---|---|
-| `-once` | 한 줄 요약과 툴팁 내용을 출력하고 끝낸다 |
-| `-tokens` | 토큰 집계를 JSON 으로 출력 |
-| `-only claude` / `-only codex` / `-only antigravity` | 한쪽만 다룬다 |
-| `-icons <폴더>` | 아이콘 견본을 PNG/ICO 로 떨어뜨린다 |
-| `-notify` | 알림을 한 번 띄워 본다 |
-| `-install` | 로그인 자동 실행 + 아이콘 꺼내기 + 지금 띄우기를 한 번에 |
-| `-uninstall` | `-install` 로 건 자동 실행을 뗀다 |
-| `-promote` | 아이콘을 작업표시줄에 고정한다(윈도우). `-restart-explorer` 와 함께 쓰면 explorer 까지 재시작 |
-
-## 문제 해결
-
-| 증상 | 조치 |
-|---|---|
-| 아무것도 안 뜬다 | 자격증명이 없다. `usage-tray -once` 로 확인 |
-| 링이 오버플로(∧) 안에만 있다 | `-install` 을 한 번 돌린다(윈도우) |
-| 로그인해도 안 뜬다 | 실행 파일을 옮겼다면 새 자리에서 `-install` 을 다시 돌린다 |
-| 이미 실행 중이라고 나온다 | 그 포트를 쓰는 인스턴스가 이미 있다 |
-| Codex 가 `기록 N분 전` 으로만 나온다 | 토큰이 만료됐을 수 있다. `codex` 를 한 번 실행 |
-| 값이 안 변한다 | 최소 간격 탓이다(3분). 우클릭 → 지금 갱신 |
-| 토큰 표가 비어 있다 | 첫 스캔이 아직이다. `-tokens` 로 직접 돌려 본다 |
-
-로그는 데이터 폴더의 `usage-tray.log` 이고 실패 사유만 쌓인다.
+앱의 민트색 계기판과 요약 카드의 두 버튼은 [Lucide](https://lucide.dev/) 아이콘을 사용합니다. 계기판의 출처·라이선스는 [assets/LICENSE.lucide.txt](assets/LICENSE.lucide.txt), 버튼 아이콘은 [원본과 재생성 안내](vendor/fyne.io/systray/icons/README.md)에 보존합니다. 외부 라이브러리의 README와 라이선스는 `vendor/`에 원문으로 유지합니다.

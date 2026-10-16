@@ -12,18 +12,23 @@ cd "$(dirname "$0")"
 
 APP="dist/UsageTray.app"
 BIN="dist/usage-tray"
+VERSION="${VERSION:-dev}"
+if [[ ! "$VERSION" =~ ^(dev|v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$ ]]; then
+  echo 'VERSION 형식이 올바르지 않다' >&2
+  exit 1
+fi
 
 mkdir -p dist
 export CGO_ENABLED=1
 
 # 애플 실리콘 + 인텔 둘 다 도는 유니버설 바이너리로 만든다.
 if [ "${UNIVERSAL:-1}" = "1" ] && command -v lipo >/dev/null 2>&1; then
-  GOARCH=arm64 go build -trimpath -ldflags '-s -w' -o dist/usage-tray-arm64 .
-  GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist/usage-tray-amd64 .
+  GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.appVersion=$VERSION" -o dist/usage-tray-arm64 .
+  GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.appVersion=$VERSION" -o dist/usage-tray-amd64 .
   lipo -create -output "$BIN" dist/usage-tray-arm64 dist/usage-tray-amd64
   rm -f dist/usage-tray-arm64 dist/usage-tray-amd64
 else
-  go build -trimpath -ldflags '-s -w' -o "$BIN" .
+  go build -trimpath -ldflags "-s -w -X main.appVersion=$VERSION" -o "$BIN" .
 fi
 
 # .app 번들 — 메뉴바 앱은 Dock 아이콘이 없어야 하므로 LSUIElement=true 를 넣는다.
@@ -45,7 +50,10 @@ if [ -f assets/icon.png ] && command -v iconutil >/dev/null 2>&1; then
 else
   echo "아이콘을 건너뛴다 (assets/icon.png 또는 iconutil 이 없다)"
 fi
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+BUNDLE_VERSION="${VERSION#v}"
+BUNDLE_VERSION="${BUNDLE_VERSION%%[-+]*}"
+if [ "$VERSION" = "dev" ]; then BUNDLE_VERSION="0.0.0"; fi
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -53,8 +61,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>UsageTray</string>
   <key>CFBundleDisplayName</key><string>Usage Tray</string>
   <key>CFBundleIdentifier</key><string>local.usage-tray</string>
-  <key>CFBundleVersion</key><string>1.1.0</string>
-  <key>CFBundleShortVersionString</key><string>1.1.0</string>
+  <key>CFBundleVersion</key><string>$BUNDLE_VERSION</string>
+  <key>CFBundleShortVersionString</key><string>$BUNDLE_VERSION</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>usage-tray</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>

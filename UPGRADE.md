@@ -1,5 +1,7 @@
 # UsageTray 1.1.0 — macOS 확장판
 
+이 문서는 기존 macOS 확장판의 변경 기록입니다. 현재 실행·설정 방법은 [사용법](docs/usage.md), 빌드·검증 절차는 [개발 문서](docs/development.md)를 참고하세요. 아래 버전 설명과 명령은 당시 기록으로 보존합니다.
+
 원본: https://github.com/inging88/usage_tray
 
 ## 사용 방법

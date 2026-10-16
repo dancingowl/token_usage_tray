@@ -6,17 +6,7 @@ package main
 // Windows 는 WinForms, macOS 는 Cocoa 로 따로 만들어야 한다(= 두 벌 유지). HTML 한 장이면
 // 양쪽이 같고, 차트·표를 그리기도 훨씬 쉽다. 브라우저 탭으로 열린다.
 //
-// 링은 트레이 아이콘과 같은 코드로 그려 base64 PNG 로 심는다 — 화면과 아이콘이 어긋나지 않게.
-//
-// 2026-09-18 개편: "가독성이 떨어지고 칙칙하다 · 글자가 다 안 나온다" 는 지적을 받아 셋을 고쳤다.
-//  1. 차트를 인라인 SVG 에서 HTML/CSS 막대로 바꿨다. SVG 는 viewBox(760)를 패널 폭(약 560)에
-//     맞춰 줄이면 안의 text 까지 0.74 배로 같이 줄어 11px 눈금이 8px 로 뭉개졌다 — 글자가 안
-//     보이던 원인이다. HTML 막대의 눈금·날짜는 진짜 DOM 텍스트라 어떤 폭에서도 지정한 크기다.
-//  2. 명도차를 벌렸다. 배경 #18181b 과 카드 #202024 는 사실상 같은 색이라 카드 경계가 보이지
-//     않았다. 배경은 더 어둡게 · 카드는 더 밝게 하고 경계선을 살렸다. 보조 텍스트도 한 단 밝게.
-//  3. 숫자를 오른쪽 정렬 + tabular-nums 로 자리를 맞췄고, 리셋 시각을 사람이 읽는 표기로 바꿨다
-//     (내일 08:00 · 18시간 뒤). 그 전에는 fri 08:00 이라 며칠인지 알 수 없었다 — 이미 있던
-//     fmtResetHuman/fmtUntil 을 카드가 쓰지 않고 있었다.
+// 화면별 주소를 나누고, 갱신 가능한 통계를 분리해 설정 입력을 유지한다.
 
 import (
 	"encoding/base64"
@@ -112,10 +102,6 @@ func fmtAge(min int) string {
 		return fmt.Sprintf("%dh%02dm", min/60, min%60)
 	}
 	return fmt.Sprintf("%dm", min)
-}
-
-func ringIMG(left int, brand color.NRGBA) string {
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(bigRingPNG(left, brand))
 }
 
 // 플랜 문자열을 사람이 읽게 — API 값 self_serve_business_prolite 를 Business Prolite 로.
@@ -244,126 +230,150 @@ func barChartHTML(days []DayRow, brand color.NRGBA, valueOf func(DayRow) int64) 
 
 const pageCSS = `
 :root{
-  --bg:#0d0e12; --panel:#1b1d24; --panel2:#23252e; --line:#31343f;
-  --tx:#f4f5f7; --sub:#c2c6d0; --dim:#8b909c;
-  --warn:#fbbf24; --bad:#fb7185;
+  color-scheme:light;
+  --bg:#f4f6f8; --panel:#fff; --panel2:#f7f9fa; --line:#e1e6ec;
+  --tx:#202938; --sub:#626b78; --dim:#626b78;
+  --accent:#157f71; --warn:#a66b08; --bad:#c64242;
 }
 *{box-sizing:border-box}
-body{margin:0 auto;max-width:1180px;background:var(--bg);color:var(--tx);
-  font:14px/1.55 "Segoe UI","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;padding:26px 24px 34px}
+html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{margin:0 auto;max-width:1040px;background:var(--bg);color:var(--tx);
+  font:14px/1.55 "Segoe UI","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;padding:28px 24px 34px}
 .num,em,.cl,.ch-line span,.ch-x{font-variant-numeric:tabular-nums}
-
-header{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-bottom:16px}
-h1{font-size:25px;letter-spacing:-.01em;margin:0}
-.brand{display:inline-flex;align-items:center;gap:8px;margin-right:2px}
+header{margin-bottom:22px}
+.header-top{display:flex;align-items:center;justify-content:space-between;gap:16px 24px;flex-wrap:wrap;margin-bottom:20px}
+.header-status{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;margin-left:auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.app-icon{width:34px;height:34px;flex:none;border-radius:9px}
+h1{font-size:21px;line-height:1.2;letter-spacing:-.03em;margin:0;font-weight:750}
 .meta{color:var(--dim);font-size:12px}
-/* 이름을 .live 로 두면 아래 .chip.live 가 이 규칙까지 물려받아 꼬리표가 6px 점으로 찌그러진다. */
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ade80;margin-right:5px}
-
-.row{display:grid;gap:14px;margin-bottom:14px}
-.row.cards{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
-.row.two{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
-
-.card,.panel,.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px}
-.card{padding:16px 18px;display:flex;gap:16px;align-items:center}
-.card img{width:82px;height:82px;flex:none}
+.dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#39a68e;margin-right:5px;vertical-align:2px}
+.page-nav{display:flex;align-items:center;gap:28px;border-bottom:1px solid var(--line)}
+.page-nav a{color:var(--sub);font-size:14px;text-decoration:none;padding:10px 0 12px;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.page-nav a:hover{color:var(--accent);border-bottom-color:#a9d4c9}
+.page-nav a[aria-current="page"]{border-bottom-color:var(--accent);color:#0c695d;font-weight:700}
+body:not([data-page="usage"]) #usage-snapshot,body:not([data-page="tokens"]) #token-details{display:none}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.row{display:grid;gap:12px;margin-bottom:14px;min-width:0}
+.row.cards,.row.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.row.cards>.card:only-child,.row.two>.panel:only-child,.stats>.stat:only-child{grid-column:1/-1}
+.card,.panel,.stat{background:var(--panel);border:1px solid var(--line);border-radius:13px;min-width:0}
+.card{padding:17px 19px;box-shadow:0 2px 5px #20293803}
 .cbody{min-width:0}
-.ct{font-weight:700;font-size:13.5px;margin-bottom:2px;display:flex;align-items:center;gap:9px}
-.cl{font-size:33px;font-weight:700;line-height:1.15}
-.cl span{font-size:13px;color:var(--sub);font-weight:500;margin-left:4px}
-.cl.warn{color:var(--warn)} .cl.bad{color:var(--bad)}
-.cs{color:var(--sub);font-size:12.5px;margin-top:3px}
-.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
-.chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
-  font-size:11px;line-height:1;padding:4px 8px;border-radius:999px}
-.chip.live{color:#86efac;border-color:#2c4a3a}
-.chip.bad{color:var(--bad);border-color:#5b2b36}
-
-.panel{padding:16px 18px}
-.panel h2{font-size:13px;color:var(--sub);margin:0 0 14px;font-weight:700;
-  display:flex;align-items:center;gap:9px}
-
-.chart{position:relative;padding-left:58px}
-.ch-scale{position:absolute;left:58px;right:0;top:0;height:152px;
-  display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ct{font-weight:650;font-size:14px;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;text-align:right;margin-left:auto}
+.ct-label{overflow-wrap:anywhere}
+.cl{font-size:29px;font-weight:750;line-height:1.2;white-space:nowrap;letter-spacing:-.03em}
+.cl span{font-size:12px;color:var(--sub);font-weight:500;margin-left:3px;letter-spacing:0}
+.cl.unknown{font-size:17px;color:var(--sub);font-weight:600;letter-spacing:0}
+.cl.warn{color:var(--warn)}.cl.bad{color:var(--bad)}
+.card-details{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;margin-top:12px}
+.cs{display:flex;align-items:baseline;justify-content:flex-start;gap:5px 8px;color:var(--sub);font-size:13px;flex-wrap:wrap;flex:1;min-width:0}
+.cs strong{font-size:14px;color:var(--tx);font-weight:750}
+.cs time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.cs time:before{content:'·';margin-right:8px}
+.card-notes{color:var(--dim);font-size:11px;overflow-wrap:anywhere;text-align:right;flex:0 1 auto;max-width:40%}
+.card-note.bad{color:var(--bad)}.card-note.live{color:var(--accent)}
+.chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:11px;line-height:1.3;padding:3px 7px;border-radius:6px}
+.panel{padding:17px 19px}
+.panel h2{font-size:13px;color:var(--sub);margin:0 0 14px;font-weight:650;display:flex;align-items:center;gap:8px}
+.token-details{margin-top:2px}
+.token-details>h2{color:var(--tx);font-size:17px;margin-bottom:18px}
+.token-details>h2 .summary-note{margin-left:12px}
+.token-details #token-snapshot>.row:last-of-type{margin-bottom:0}
+.token-details .panel,.token-details .stat{background:var(--panel2)}
+.chart{position:relative;padding-left:48px}
+.ch-scale{position:absolute;left:48px;right:0;top:0;height:152px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
 .ch-line{position:relative;border-top:1px solid var(--line)}
 .ch-line:not(:first-child){border-top-style:dashed}
-.ch-line span{position:absolute;left:-58px;top:-9px;width:50px;text-align:right;
-  font-size:11.5px;color:var(--dim)}
-.ch-bars{position:relative;display:flex;gap:6px;height:176px}
+.ch-line span{position:absolute;left:-48px;top:-9px;width:41px;text-align:right;font-size:11px;color:var(--dim)}
+.ch-bars{position:relative;display:flex;gap:5px;height:176px}
 .ch-col{flex:1;display:flex;flex-direction:column;min-width:0}
 .ch-track{flex:1;display:flex;align-items:flex-end}
-.ch-bar{width:100%;background:var(--brand);opacity:.5;border-radius:4px 4px 0 0;min-height:2px}
-.ch-bar.is-today{opacity:1}
-.ch-col:hover .ch-bar{opacity:.85}
-.ch-x{height:24px;line-height:24px;text-align:center;font-size:11px;color:var(--dim);
-  letter-spacing:-.2px;white-space:nowrap}
-@media (max-width:700px){.ch-x.sec{visibility:hidden}}
-
-.stats{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));margin-bottom:14px}
-.stat{padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px}
-.stat b{font-size:13px;display:flex;align-items:center;gap:9px}
-.stat i{font-style:normal;color:var(--dim);font-size:12px}
-.stat em{font-style:normal;color:var(--tx);font-weight:700;font-size:13px;margin-left:5px}
-
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;color:var(--dim);font-weight:500;font-size:11.5px;
-  padding:0 0 8px;border-bottom:1px solid var(--line)}
-td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.045)}
+.ch-bar{width:100%;background:var(--brand);opacity:.45;border-radius:3px 3px 0 0;min-height:2px}
+.ch-bar.is-today{opacity:.9}.ch-col:hover .ch-bar{opacity:.8}
+.ch-x{height:24px;line-height:24px;text-align:center;font-size:10px;color:var(--dim);letter-spacing:-.3px;white-space:nowrap}
+.stats{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:14px}
+.stat{padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.stat b{font-size:12px;display:flex;align-items:center;gap:7px}
+.stat i{font-style:normal;color:var(--dim);font-size:11px}
+.stat em{font-style:normal;color:var(--tx);font-weight:700;font-size:12px;margin-left:5px}
+.table-scroll{overflow-x:auto;max-width:100%;scrollbar-width:thin}
+table{width:100%;border-collapse:collapse;font-size:12px}
+.table-scroll table{min-width:350px;table-layout:fixed}
+.table-scroll th:first-child{width:36%}
+.projects-table th:nth-child(2){width:18%}
+th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;padding:0 0 8px;border-bottom:1px solid var(--line)}
+td{padding:9px 0;border-bottom:1px solid var(--line)}
 tr:last-child td{border-bottom:0}
-th.num,td.num{text-align:right;padding-left:14px}
+th.num,td.num{text-align:right;padding-left:10px;white-space:nowrap}
 td.num{color:var(--sub)}
-td.name{max-width:220px}
 td.name,td.plain{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 td.who{width:1%;white-space:nowrap}
 .mrow{display:flex;align-items:center;min-width:0}
 .mt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ic{display:inline-flex;align-items:center;justify-content:center;flex:none;color:rgb(var(--c))}
 .ic svg{width:100%;height:100%;display:block}
-.ic.lg{width:32px;height:32px;padding:4px;margin-right:12px;border-radius:9px;
-  background:rgba(var(--c),.15);border:1px solid rgba(var(--c),.42)}
-.ic.sm{width:30px;height:30px}
-.ic.xl{width:46px;height:46px;padding:6px;border-radius:13px;
-  background:rgba(var(--c),.15);border:1px solid rgba(var(--c),.42)}
-.marks{display:inline-flex;gap:7px;align-items:center}
+.ic.lg{width:25px;height:25px;padding:4px;margin-right:8px;border-radius:6px;background:rgba(var(--c),.08)}
+.ic.sm{width:21px;height:21px}
+.marks{display:inline-flex;gap:4px;align-items:center}
 tfoot td{border-top:1px solid var(--line);border-bottom:0;padding-top:10px;font-weight:700;color:var(--tx)}
-tfoot tr+tr td{border-top:0;padding-top:2px}
-tfoot td.num{color:var(--tx)}
-tfoot .sum{color:var(--sub);font-weight:500;font-size:12px}
-
-footer{color:var(--dim);font-size:11.5px;margin-top:18px}
-.none{color:var(--sub);font-size:13px}
-@media (max-width:620px){
-  body{padding:18px 14px 26px}
-  .card{gap:12px;padding:14px} .card img{width:64px;height:64px} .cl{font-size:28px}
+tfoot tr+tr td{border-top:0;padding-top:2px}tfoot td.num{color:var(--tx)}
+tfoot .sum{color:var(--sub);font-weight:500;font-size:11px}
+footer{color:var(--dim);font-size:11px;margin-top:16px;overflow-wrap:anywhere}
+.none{color:var(--sub);font-size:12px}
+@media(max-width:760px){
+  .row.cards,.row.two,.stats{grid-template-columns:1fr}
+  .ch-x.sec{visibility:hidden}
 }
+@media(max-width:620px){.cs time{flex-basis:100%}.cs time:before{display:none}}
+@media(max-width:480px){
+  body{padding:20px 14px 26px}header{margin-bottom:16px}
+  .header-top{gap:14px;margin-bottom:12px}.header-status{width:100%;margin-left:0;justify-content:space-between;gap:8px}.meta{font-size:11px}
+  .page-nav{gap:24px}.page-nav a{font-size:13px;padding:9px 0 11px}
+  .card,.panel{padding:15px}.cl{font-size:27px}.ct{font-size:13px;gap:6px}
+  .cl span{font-size:11px}.card-top{gap:8px}.token-details .panel{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 `
 
 func renderPage(s *State, tok *TokenStats) string {
+	return renderPageView(s, tok, "usage")
+}
+
+func renderPageView(s *State, tok *TokenStats, view string) string {
+	pageTitle := "한도 현황"
+	switch view {
+	case "tokens":
+		pageTitle = "토큰 통계"
+	case "settings":
+		pageTitle = "설정"
+	default:
+		view = "usage"
+	}
 	var b strings.Builder
 	b.WriteString(`<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta http-equiv="refresh" content="30">
+<meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/png;base64,` + base64.StdEncoding.EncodeToString(faviconPNG) + `">
-<title>사용량</title><style>` + pageCSS + `</style></head><body>`)
+<title>Usage Tray · ` + pageTitle + `</title><style>` + pageCSS + dashboardCSS + `</style></head><body data-page="` + view + `">`)
 
-	// 최상단 — 쓰는 에이전트의 마크를 크게 세우고 그 옆에 제목·갱신 시각.
-	brand := ""
-	if s.Antigravity.Available {
-		brand += agentIcon(markAntigravity, "xl")
+	fmt.Fprintf(&b, `<header><div class="header-top"><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
+		`<h1>Usage Tray</h1></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div>`,
+		base64.StdEncoding.EncodeToString(faviconPNG), s.Updated.Local().Format("15:04:05"))
+	b.WriteString(headerActionsHTML + `</div></div><p id="action-message" class="dash-message header-message" role="status" aria-live="polite"></p><nav class="page-nav" aria-label="화면 이동">`)
+	for _, item := range []struct{ view, path, label string }{
+		{"usage", "/", "한도 현황"}, {"tokens", "/tokens", "토큰 통계"}, {"settings", "/settings", "설정"},
+	} {
+		active := ""
+		if item.view == view {
+			active = ` aria-current="page"`
+		}
+		fmt.Fprintf(&b, `<a href="%s"%s>%s</a>`, item.path, active, item.label)
 	}
-	if s.Claude.Available {
-		brand += agentIcon(markClaude, "xl")
-	}
-	if s.Codex.Available {
-		brand += agentIcon(markCodex, "xl")
-	}
-	fmt.Fprintf(&b, `<header><span class="brand">%s</span><h1>사용량</h1>`+
-		`<div class="meta"><span class="dot"></span>%s 갱신 · 30초마다</div></header>`,
-		brand, s.Updated.Local().Format("15:04:05"))
+	b.WriteString(`</nav></header>`)
 
-	b.WriteString(`<div class="row cards">`)
+	b.WriteString(`<section id="usage-snapshot"><div class="row cards">`)
 	for _, c := range gaugeCards(s) {
 		b.WriteString(cardHTML(c))
 	}
@@ -380,8 +390,9 @@ func renderPage(s *State, tok *TokenStats) string {
 	if s.Antigravity.Available {
 		b.WriteString(`<p class="none">Antigravity는 모델별 잔여 한도와 리셋 시각을 표시합니다. 토큰 수와 과거 사용량은 제공되지 않습니다.</p>`)
 	}
+	b.WriteString(`</section>` + dashboardHTML + `<section id="token-details" class="token-details panel dashboard-full" aria-labelledby="token-title"><h2 id="token-title">토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></h2><section id="token-snapshot">`)
 	if tok == nil {
-		b.WriteString(`<div class="panel none">토큰 집계가 아직 없다 — 첫 스캔이 끝나면 채워진다.</div></body></html>`)
+		b.WriteString(`<div class="panel none">토큰 집계가 아직 없습니다. 첫 스캔이 끝나면 채워집니다.</div></section></section>` + dashboardScriptTag() + `</body></html>`)
 		return b.String()
 	}
 
@@ -422,7 +433,7 @@ func renderPage(s *State, tok *TokenStats) string {
 	b.WriteString(`<div class="row two">`)
 
 	models := mergeModels(s, tok)
-	b.WriteString(`<div class="panel"><h2>모델별 · 7일</h2><table>` +
+	b.WriteString(`<div class="panel"><h2>모델별 · 7일</h2><div class="table-scroll"><table>` +
 		`<tr><th>모델</th><th class="num">요청</th><th class="num">입력</th>` +
 		`<th class="num">출력</th><th class="num">캐시</th></tr>`)
 	for _, m := range models {
@@ -438,10 +449,10 @@ func renderPage(s *State, tok *TokenStats) string {
 			html.EscapeString(t.label), t.Requests,
 			fmtTokens(t.Input+t.CacheCreate), fmtTokens(t.Output), t.hitPct())
 	}
-	b.WriteString(`</tfoot></table></div>`)
+	b.WriteString(`</tfoot></table></div></div>`)
 
 	projects := mergeProjects(s, tok)
-	b.WriteString(`<div class="panel"><h2>프로젝트별 · 7일</h2><table>` +
+	b.WriteString(`<div class="panel"><h2>프로젝트별 · 7일</h2><div class="table-scroll"><table class="projects-table">` +
 		`<tr><th>프로젝트</th><th></th><th class="num">요청</th><th class="num">토큰</th></tr>`)
 	for _, p := range projects {
 		fmt.Fprintf(&b, `<tr><td class="plain" title="%s">%s</td><td class="who">%s</td>`+
@@ -455,112 +466,129 @@ func renderPage(s *State, tok *TokenStats) string {
 			`<td class="num">%s</td></tr>`,
 			html.EscapeString(t.label), t.Requests, fmtTokens(t.total()))
 	}
-	b.WriteString(`</tfoot></table></div></div>`)
+	b.WriteString(`</tfoot></table></div></div></div>`)
 
 	fmt.Fprintf(&b, `<footer>집계 %s · %dms · 출처 Claude %s / Codex %s</footer>`,
 		tok.Updated.Local().Format("2006-01-02 15:04:05"), tok.ScanMs,
-		orDash(s.Claude.Src), orDash(s.Codex.Src))
+		html.EscapeString(orDash(s.Claude.Src)), html.EscapeString(orDash(s.Codex.Src)))
 
-	b.WriteString(`</body></html>`)
+	b.WriteString(`</section></section>` + dashboardScriptTag() + `</body></html>`)
 	return b.String()
+}
+
+// Keep service-wide metadata explicit so a limit is not mistaken for one quota's exhaustion.
+func quotaNotes(name string, u AgentUsage) []chip {
+	var notes []chip
+	if p := prettyPlan(u.Plan); p != "" {
+		notes = append(notes, chip{Text: p})
+	}
+	if u.Src != "" {
+		text := "출처 " + u.Src
+		kind := ""
+		if u.Src == "api" || u.Src == "live" {
+			text = "실시간"
+			kind = "live"
+		} else {
+			if u.Src == "cache" {
+				text = "캐시"
+			}
+			if u.AgeMin >= 0 {
+				text += fmt.Sprintf(" · %d분 전", u.AgeMin)
+			}
+		}
+		notes = append(notes, chip{Text: text, Kind: kind})
+	} else if u.AgeMin >= 0 {
+		notes = append(notes, chip{Text: "기록 " + fmtAge(u.AgeMin) + " 전"})
+	}
+	if u.Extra != "" {
+		notes = append(notes, chip{Text: u.Extra})
+	}
+	if u.Limit != "" {
+		notes = append(notes, chip{Text: name + " 이용 제한: " + u.Limit, Kind: "bad"})
+	}
+	return notes
 }
 
 func gaugeCards(s *State) []gaugeCard {
 	var cards []gaugeCard
-	if s.Claude.Available {
-		var src []chip
-		if s.Claude.Src != "" && s.Claude.Src != "api" {
-			src = []chip{{Text: s.Claude.Src}}
-			if s.Claude.AgeMin >= 0 {
-				src = append(src, chip{Text: fmtAge(s.Claude.AgeMin) + " 전"})
-			}
+	for _, a := range []struct {
+		usage AgentUsage
+		mark  agentMark
+	}{{s.Claude, markClaude}, {s.Codex, markCodex}} {
+		if !a.usage.Available {
+			continue
 		}
-		week := src
-		if s.Claude.Extra != "" {
-			week = append([]chip{{Text: s.Claude.Extra}}, src...)
+		if w := a.usage.Short; w.Left >= 0 || w.ResetAt > 0 {
+			cards = append(cards, gaugeCard{a.mark.name + " · " + windowName(w, "5시간") + " 한도",
+				w.Left, a.mark.brand, w.ResetAt, nil, a.mark})
 		}
-		cards = append(cards,
-			gaugeCard{"Claude · 5시간", s.Claude.Short.Left, colClaude, s.Claude.Short.ResetAt, src, markClaude},
-			gaugeCard{"Claude · 주간", s.Claude.Week.Left, colClaude, s.Claude.Week.ResetAt, week, markClaude})
-	}
-	if s.Codex.Available {
-		var chips []chip
-		if p := prettyPlan(s.Codex.Plan); p != "" {
-			chips = append(chips, chip{Text: p})
-		}
-		switch {
-		case s.Codex.Limit != "":
-			chips = append(chips, chip{Text: "한도 도달 · " + s.Codex.Limit, Kind: "bad"})
-		case s.Codex.Src == "live":
-			chips = append(chips, chip{Text: "live", Kind: "live"})
-		case s.Codex.AgeMin >= 0:
-			chips = append(chips, chip{Text: "기록 " + fmtAge(s.Codex.AgeMin) + " 전"})
-		}
-		if s.Codex.Short.Left >= 0 {
-			cards = append(cards, gaugeCard{"Codex · " + s.Codex.Short.Label,
-				s.Codex.Short.Left, colCodex, s.Codex.Short.ResetAt, nil, markCodex})
-		}
-		cards = append(cards, gaugeCard{"Codex · 주간", s.Codex.Week.Left, colCodex,
-			s.Codex.Week.ResetAt, chips, markCodex})
+		w := a.usage.Week
+		cards = append(cards, gaugeCard{a.mark.name + " · " + windowName(w, "주간") + " 한도",
+			w.Left, a.mark.brand, w.ResetAt, quotaNotes(a.mark.name, a.usage), a.mark})
 	}
 	if s.Antigravity.Available {
-		chips := []chip{{Text: "로컬 앱"}}
-		if s.Antigravity.Src == "직전값" {
-			chips = append(chips, chip{Text: "직전값 " + fmtAge(s.Antigravity.AgeMin) + " 전"})
-		}
+		notes := quotaNotes("Antigravity", s.Antigravity)
 		if len(s.Antigravity.Models) == 0 {
-			cards = append(cards, gaugeCard{"Antigravity", -1, colAntigravity, 0, chips, markAntigravity})
+			cards = append(cards, gaugeCard{"Antigravity · 모델 한도", -1, colAntigravity, 0, notes, markAntigravity})
 		}
 		for _, m := range s.Antigravity.Models {
-			cards = append(cards, gaugeCard{"Antigravity · " + m.Label, m.Left, colAntigravity, m.ResetAt, chips, markAntigravity})
+			cards = append(cards, gaugeCard{"Antigravity · " + m.Label + " 한도", m.Left, colAntigravity, m.ResetAt, notes, markAntigravity})
 		}
 	}
 	return cards
 }
 
 func cardHTML(c gaugeCard) string {
+	return cardHTMLAt(c, time.Now())
+}
+
+func cardHTMLAt(c gaugeCard, now time.Time) string {
 	cls := ""
-	if c.Left >= 0 && c.Left < 20 {
+	switch {
+	case c.Left < 0:
+		cls = " unknown"
+	case c.Left <= 10:
 		cls = " bad"
-	} else if c.Left >= 0 && c.Left < 50 {
+	case c.Left <= 20:
 		cls = " warn"
 	}
-	left := `?<span>남음</span>`
+	left := `확인 중`
 	if c.Left >= 0 {
-		left = fmt.Sprintf(`%d<span>%% 남음</span>`, c.Left)
+		left = fmt.Sprintf(`%d%%<span>남음</span>`, c.Left)
 	}
-
-	reset := "리셋 시각 미확인"
-	if c.ResetAt > 0 {
-		reset = "리셋 " + fmtResetHuman(c.ResetAt)
-		if u := fmtUntil(c.ResetAt); u != "" {
-			reset += " · " + u
+	// Share native tooltip formatting, then put its countdown before the date.
+	reset := clickResetDetail(Window{Left: c.Left, ResetAt: c.ResetAt}, now)
+	resetHTML := `<strong>` + html.EscapeString(reset) + `</strong>`
+	if date, remaining, ok := strings.Cut(reset, " 초기화 · "); ok {
+		if strings.HasSuffix(remaining, " 후") {
+			remaining += " 초기화"
 		}
+		resetHTML = fmt.Sprintf(`<strong>%s</strong><time datetime="%s">%s</time>`,
+			html.EscapeString(remaining), time.Unix(c.ResetAt, 0).In(now.Location()).Format(time.RFC3339), html.EscapeString(date))
 	}
-
-	chips := ""
-	var cb strings.Builder
-	n := 0
-	for _, ch := range c.Chips {
-		if ch.Text == "" {
+	var notes strings.Builder
+	for _, note := range c.Chips {
+		if note.Text == "" {
 			continue
 		}
-		k := ""
-		if ch.Kind != "" {
-			k = " " + ch.Kind
+		if notes.Len() > 0 {
+			notes.WriteString(` · `)
 		}
-		fmt.Fprintf(&cb, `<span class="chip%s">%s</span>`, k, html.EscapeString(ch.Text))
-		n++
+		kind := ""
+		if note.Kind != "" {
+			kind = " " + html.EscapeString(note.Kind)
+		}
+		fmt.Fprintf(&notes, `<span class="card-note%s">%s</span>`, kind, html.EscapeString(note.Text))
 	}
-	if n > 0 {
-		chips = `<div class="chips">` + cb.String() + `</div>`
+	info := ""
+	if notes.Len() > 0 {
+		info = `<div class="card-notes">` + notes.String() + `</div>`
 	}
-
-	return fmt.Sprintf(`<div class="card"><img src="%s" alt=""><div class="cbody">`+
-		`<div class="ct" style="color:rgb(%d,%d,%d)">%s%s</div><div class="cl%s">%s</div>`+
-		`<div class="cs">%s</div>%s</div></div>`,
-		ringIMG(c.Left, c.Brand), c.Brand.R, c.Brand.G, c.Brand.B,
-		agentIcon(c.Mark, "sm"), html.EscapeString(c.Title), cls, left, html.EscapeString(reset), chips)
+	return fmt.Sprintf(`<div class="card" data-agent="%s"><div class="cbody"><div class="card-top">`+
+		`<div class="cl%s">%s</div><div class="ct">%s<span class="ct-label">%s</span></div></div>`+
+		`<div class="card-details"><div class="cs">%s</div>%s</div></div></div>`,
+		strings.ToLower(c.Mark.name), cls, left, agentIcon(c.Mark, "sm"), html.EscapeString(c.Title),
+		resetHTML, info)
 }
 
 func statHTML(title string, m agentMark, pairs [][2]string) string {

@@ -229,14 +229,23 @@ type winTray struct {
 	visibleItems    map[uint32][]uint32
 	muVisibleItems  sync.RWMutex
 
-	nid   *notifyIconData
-	muNID sync.RWMutex
-	wcex  *wndClassEx
+	nid       *notifyIconData
+	muNID     sync.RWMutex
+	hidden    bool // Requested visibility, protected by muNID.
+	iconAdded bool // Actual Shell registration, protected by muNID.
+	wcex      *wndClassEx
+	// Click text is separate from the Shell hover tooltip, under muNID.
+	clickText clickTooltipBuffer
+	clickRows []ClickTooltipRow
 
 	wmSystrayMessage,
 	wmTaskbarCreated uint32
 
 	initialized atomic.Bool
+
+	// Owned exclusively by the tray window's thread (wndProc).
+	clickTooltip *trackingTooltip
+	clicks       trayClickState
 }
 
 // isReady checks if the tray as already been initialized. It is not goroutine safe with in regard to the initialization function, but prevents a panic when functions are called too early.
@@ -247,7 +256,7 @@ func (t *winTray) isReady() bool {
 // Loads an image from file and shows it in tray.
 // Shell_NotifyIcon: https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159(v=vs.85).aspx
 func (t *winTray) setIcon(src string) error {
-	if !wt.isReady() {
+	if !t.isReady() {
 		return ErrTrayNotReadyYet
 	}
 
@@ -264,13 +273,16 @@ func (t *winTray) setIcon(src string) error {
 	t.nid.Flags |= NIF_ICON
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
 
+	if t.hidden || !t.iconAdded {
+		return nil
+	}
 	return t.nid.modify()
 }
 
 // Sets tooltip on icon.
 // Shell_NotifyIcon: https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159(v=vs.85).aspx
 func (t *winTray) setTooltip(src string) error {
-	if !wt.isReady() {
+	if !t.isReady() {
 		return ErrTrayNotReadyYet
 	}
 
@@ -282,10 +294,14 @@ func (t *winTray) setTooltip(src string) error {
 
 	t.muNID.Lock()
 	defer t.muNID.Unlock()
-	copy(t.nid.Tip[:], b[:])
+	t.nid.Tip = [128]uint16{}
+	copy(t.nid.Tip[:len(t.nid.Tip)-1], b)
 	t.nid.Flags |= NIF_TIP
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
 
+	if t.hidden || !t.iconAdded {
+		return nil
+	}
 	return t.nid.modify()
 }
 
@@ -302,8 +318,22 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		WM_ENDSESSION    = 0x0016
 		WM_CLOSE         = 0x0010
 		WM_DESTROY       = 0x0002
+		WM_TIMER         = 0x0113
 	)
 	switch message {
+	case wmTrayVisibility:
+		t.muNID.RLock()
+		hidden := t.hidden
+		t.muNID.RUnlock()
+		if hidden {
+			t.cancelSingleClick()
+			t.hideClickTooltip()
+		}
+		if err := t.applyVisibility(); err != nil {
+			log.Printf("systray error: unable to change visibility: %s", err)
+		}
+	case wmClickSummaryChanged:
+		t.refreshVisibleClickTooltip()
 	case WM_COMMAND:
 		menuItemId := int32(wParam)
 		// https://docs.microsoft.com/en-us/windows/win32/menurc/wm-command#menus
@@ -311,6 +341,7 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 			systrayMenuItemSelected(uint32(wParam))
 		}
 	case WM_CLOSE:
+		t.destroyClickTooltip()
 		pDestroyWindow.Call(uintptr(t.window))
 		t.wcex.unregister()
 	case WM_DESTROY:
@@ -318,26 +349,39 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		defer pPostQuitMessage.Call(uintptr(int32(0)))
 		fallthrough
 	case WM_ENDSESSION:
+		t.destroyClickTooltip()
 		t.muNID.Lock()
-		if t.nid != nil {
+		if t.nid != nil && t.iconAdded {
 			t.nid.delete()
+			t.iconAdded = false
 		}
 		t.muNID.Unlock()
 		runSystrayExit()
+	case WM_TIMER:
+		t.handleClickTimer(wParam)
 	case t.wmSystrayMessage:
 		switch lParam {
+		case WM_LBUTTONUP:
+			t.deferSingleClick()
 		case WM_LBUTTONDBLCLK:
+			t.cancelSingleClick()
+			t.clicks.ignoreNextUp = true
+			t.hideClickTooltip()
 			notifyDClicked()
 		case WM_RBUTTONUP:
+			t.cancelSingleClick()
+			t.hideClickTooltip()
 			t.showMenu()
-			// WM_LBUTTONUP is intentionally not handled here: a single left
-			// click is reserved for WM_LBUTTONDBLCLK above. Showing the menu
-			// on the single click would swallow the second click.
 		}
 	case t.wmTaskbarCreated: // on explorer.exe restarts
+		t.cancelSingleClick()
+		t.hideClickTooltip()
 		t.muNID.Lock()
-		t.nid.add()
+		t.iconAdded = false
 		t.muNID.Unlock()
+		if err := t.applyVisibility(); err != nil {
+			log.Printf("systray error: unable to restore visibility: %s", err)
+		}
 	default:
 		// Calls the default window procedure to provide default processing for any window messages that an application does not process.
 		// https://msdn.microsoft.com/en-us/library/windows/desktop/ms633572(v=vs.85).aspx
@@ -480,7 +524,14 @@ func (t *winTray) initInstance() error {
 	}
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
 
-	return t.nid.add()
+	if t.hidden {
+		return nil
+	}
+	if err := t.nid.add(); err != nil {
+		return err
+	}
+	t.iconAdded = true
+	return nil
 }
 
 func (t *winTray) createMenu() error {
@@ -796,7 +847,7 @@ func (t *winTray) getVisibleItemIndex(parent, val uint32) int {
 // Loads an image from file to be shown in tray or menu item.
 // LoadImage: https://msdn.microsoft.com/en-us/library/windows/desktop/ms648045(v=vs.85).aspx
 func (t *winTray) loadIconFrom(src string) (windows.Handle, error) {
-	if !wt.isReady() {
+	if !t.isReady() {
 		return 0, ErrTrayNotReadyYet
 	}
 
@@ -899,6 +950,10 @@ func registerSystray() {
 	}
 
 	wt.initialized.Store(true)
+	// Reconcile a visibility request made between initInstance and readiness.
+	if err := wt.applyVisibility(); err != nil {
+		log.Printf("systray error: unable to apply initial visibility: %s", err)
+	}
 	systrayReady()
 }
 

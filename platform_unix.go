@@ -31,24 +31,6 @@ func escapeAS(s string) string {
 	return strings.ReplaceAll(s, `"`, `\"`)
 }
 
-func copyToClipboard(s string) {
-	bin := "pbcopy"
-	if runtime.GOOS != "darwin" {
-		bin = "xclip"
-	}
-	cmd := exec.Command(bin)
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return
-	}
-	if cmd.Start() != nil {
-		return
-	}
-	_, _ = in.Write([]byte(s))
-	_ = in.Close()
-	_ = cmd.Wait()
-}
-
 func openURL(u string) { openPath(u) }
 
 func openPath(p string) {
