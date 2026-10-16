@@ -56,7 +56,7 @@ const dashboardHTML = `
   <div id="history-overview" class="history-overview" hidden></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
  </section>
- <section id="usage-plan" class="panel page-section dashboard-full" aria-labelledby="usage-plan-title"><div class="history-heading"><h2 id="usage-plan-title">사용 계획<span id="usage-plan-context" class="summary-note"></span></h2><details id="usage-plan-help" class="history-help hover-help"><summary aria-label="사용 계획 도움말">?</summary><div class="history-help-content"><p>관측 사용량은 표시된 시작·종료 시각 사이의 잔여 한도 감소량입니다. 정수로 반올림해 저장한 잔량의 차이이며, 실제 토큰 수가 아닙니다.</p><p>현재 환산 속도는 관측 사용량을 24시간 기준으로 환산한 값이며, 지난 하루의 실제 사용량과 다릅니다. 초기화까지의 하루 예산은 남은 한도를 초기화까지 균등하게 나눠 쓰기 위한 하루 목표입니다.</p><p>%p는 전체 한도 기준의 변화량입니다. 잔량이 80%에서 70%가 되면 10%p를 사용한 것입니다. 초기화까지 하루 미만이면 시간당 예산도 표시합니다.</p><p>관측 구간은 초기화·출처 변화·잔량 회복 이후부터 계산하며 그래프 기간 필터와 독립적입니다. 소진 시점은 이 구간의 평균 사용 속도가 유지된다는 가정의 추정값입니다.</p></div></details></div>
+ <section id="usage-plan" class="panel page-section dashboard-full" aria-labelledby="usage-plan-title"><div class="history-heading"><h2 id="usage-plan-title">사용 전망<span id="usage-plan-context" class="summary-note"></span></h2><details id="usage-plan-help" class="history-help hover-help"><summary aria-label="사용 전망 도움말">?</summary><div class="history-help-content"><p>관측 사용량은 표시된 시작·종료 시각 사이의 잔여 한도 감소량입니다. 정수로 반올림해 저장한 잔량의 차이이며, 실제 토큰 수가 아닙니다.</p><p>현재 환산 속도는 관측 사용량을 24시간 기준으로 환산한 값이며, 지난 하루의 실제 사용량과 다릅니다. 초기화까지의 하루 예산은 남은 한도를 초기화까지 균등하게 나눠 쓰기 위한 하루 목표입니다.</p><p>%p는 전체 한도 기준의 변화량입니다. 잔량이 80%에서 70%가 되면 10%p를 사용한 것입니다. 초기화까지 하루 미만이면 시간당 예산도 표시합니다.</p><p>관측 구간은 초기화·출처 변화·잔량 회복 이후부터 계산하며 그래프 기간 필터와 독립적입니다. 소진 시점은 이 구간의 평균 사용 속도가 유지된다는 가정의 추정값입니다.</p></div></details></div>
   <div id="forecast-state" class="dash-forecast">예측에 필요한 기록을 확인하고 있습니다.</div>
  </section>
  <section id="settings" class="dashboard-full"><div id="settings-details" class="panel page-section">
@@ -395,7 +395,7 @@ function drawHistory() {
  const observation=forecast && forecast.observation,observedStart=Date.parse(observation && observation.started_at),observedEnd=Date.parse(observation && observation.ended_at);
  const observed=!!(observation && Number.isFinite(observedStart) && Number.isFinite(observedEnd) && observedEnd>observedStart && [observation.start_left,observation.end_left,observation.used_pp].every(value=>Number.isInteger(value) && value>=0 && value<=100) && observation.start_left-observation.end_left===observation.used_pp);
  const groups=textNode('div','','pace-groups'),records=textNode('section','','pace-group pace-records'),plan=textNode('section','','pace-group pace-plan');
- const recordsHeading=textNode('h3','관측 기록'),planHeading=textNode('h3','사용 계획');
+ const recordsHeading=textNode('h3','관측 기록'),planHeading=textNode('h3','사용 예산');
  recordsHeading.id='pace-records-title';planHeading.id='pace-plan-title';records.setAttribute('aria-labelledby',recordsHeading.id);plan.setAttribute('aria-labelledby',planHeading.id);
  const observedMetrics=textNode('dl','','pace-observation-metrics'),metrics=textNode('dl','','pace-metrics');
  records.append(recordsHeading,observedMetrics);plan.append(planHeading,metrics);groups.append(records,plan);
@@ -415,8 +415,8 @@ function drawHistory() {
   const range=label(observedStart,true)+' ~ '+label(observedEnd,!sameDay);
   actual.append(textNode('p','약 '+duration+' 관측 ('+range+')','pace-note pace-observation-range'));
  }else actual.append(textNode('p','비교할 관측 기록이 부족합니다.','pace-note'));
+ metric(observedMetrics,'현재 환산 속도',ready?forecast.rate_per_day:null,'pace-recent');
  const target=metric(metrics,'초기화까지의 하루 예산',budget,'pace-target');
- metric(metrics,'현재 환산 속도',ready?forecast.rate_per_day:null,'pace-recent');
  if(budget===0)target.append(textNode('p','남은 한도 없음','pace-note'));
  else if(pace && pace.reduction>0)plan.append(textNode('p','현재 환산 속도보다 '+(pace.reduction<1?'1% 미만':Math.min(99,Math.round(pace.reduction))+'%')+' 적게 사용','pace-note pace-reduction'));
  if(budget>0 && forecast.reset_at*1000-historyData.rangeEnd<86400000 && forecast.reset_at*1000>historyData.rangeEnd)target.append(textNode('p','시간당 '+quotaPaceLabel(budget/24),'pace-note'));
