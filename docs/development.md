@@ -11,12 +11,11 @@ macOS는 Go 외에 **Xcode Command Line Tools**가 필요합니다(`xcode-select
 메뉴바 Cocoa 연동에 cgo를 쓰므로 이 저장소의 macOS 빌드 절차는 Mac에서 실행합니다.
 Node.js와 npm은 아래 JavaScript 검증·이미지 재생성 도구에만 필요하며 배포 exe 실행에는 필요 없습니다.
 
-이 문서 작성 시 체크아웃은 `working/windows-development`, 원격 기본 브랜치 표시는 `origin/HEAD -> origin/main`입니다.
-다음 명령은 Windows 개발 브랜치를 명시적으로 받습니다. 저장소 기본 브랜치를 바꾸는 명령이 아닙니다.
-`main`의 코드와 개발 브랜치의 코드가 같다고 가정하지 말고 수정·검증할 브랜치를 먼저 확인합니다.
+아래 예시는 기본 브랜치 `main`을 받습니다. 기능 수정은 최신 `main`에서 별도 작업 브랜치를 만들고, PR의 Windows·macOS CI를 확인한 뒤 병합합니다.
+기존 작업 브랜치를 이어서 사용할 때는 수정·검증할 브랜치와 원격 반영 상태를 먼저 확인합니다.
 
 ```powershell
-git clone --branch working/windows-development https://github.com/dancingowl/token_usage_tray.git
+git clone --branch main https://github.com/dancingowl/token_usage_tray.git
 cd token_usage_tray
 git branch --show-current
 go version

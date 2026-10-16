@@ -17,14 +17,14 @@ Claude Code·Codex·Antigravity의 **남은 사용 한도와 초기화 시각**�
 
 ## 빠른 시작
 
-아래 예시는 개발 브랜치 **`working/windows-development`**를 사용합니다. 저장소의 기본 브랜치 `main`과 기능 차이가 있을 수 있습니다. 배포 파일은 [Releases](https://github.com/dancingowl/token_usage_tray/releases)에 공개된 버전을 확인하고, 릴리스가 없으면 소스에서 빌드합니다.
+아래 예시는 저장소의 기본 브랜치 **`main`**을 사용합니다. 배포 파일은 [Releases](https://github.com/dancingowl/token_usage_tray/releases)에 공개된 버전을 확인하고, 릴리스가 없으면 소스에서 빌드합니다.
 
 ### Windows에서 빌드하고 실행
 
 Git과 Go를 설치한 뒤 PowerShell에서 실행합니다.
 
 ```powershell
-git clone --branch working/windows-development https://github.com/dancingowl/token_usage_tray.git
+git clone --branch main https://github.com/dancingowl/token_usage_tray.git
 cd token_usage_tray
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Run
 ```
@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Run
 Git·Go·Xcode Command Line Tools가 설치된 macOS 터미널에서 실행합니다.
 
 ```bash
-git clone --branch working/windows-development https://github.com/dancingowl/token_usage_tray.git
+git clone --branch main https://github.com/dancingowl/token_usage_tray.git
 cd token_usage_tray
 bash ./build.sh
 open dist/UsageTray.app
