@@ -39,27 +39,37 @@ type iconBitmapInfo struct {
 
 type iconTextRect struct{ Left, Top, Right, Bottom int32 }
 
+func cachedWindowsIconText(label string) *image.Alpha {
+	if cached, ok := iconTextMasks.Load(label); ok {
+		return cached.(*image.Alpha)
+	}
+	mask := renderWindowsIconText(label)
+	if mask == nil {
+		return nil
+	}
+	cached, _ := iconTextMasks.LoadOrStore(label, mask)
+	return cached.(*image.Alpha)
+}
+
 // 실제 잉크 경계로 맞춘다. 폰트의 행간/내부 여백 때문에 숫자가 작아지는 것을 피한다.
 func drawNativeIconNumber(dst *image.NRGBA, label string, ink color.NRGBA, size int) bool {
-	var mask *image.Alpha
-	if cached, ok := iconTextMasks.Load(label); ok {
-		mask = cached.(*image.Alpha)
+	mask := cachedWindowsIconText(label)
+	if mask == nil {
+		return false
+	}
+	var width, height float64
+	if label == "-" {
+		width, height = 6, 2
 	} else {
-		mask = renderWindowsIconText(label)
-		if mask == nil {
+		// 가장 긴 100에 맞춘 공통 배율을 모든 숫자에 적용한다.
+		// 글자의 원래 비율을 유지하고 문자열 전체만 가운데에 놓는다.
+		reference := cachedWindowsIconText("100")
+		if reference == nil {
 			return false
 		}
-		cached, _ := iconTextMasks.LoadOrStore(label, mask)
-		mask = cached.(*image.Alpha)
-	}
-	height, maxWidth := 10.0, 14.0 // 자릿수와 관계없이 같은 높이와 세로 중심을 유지한다.
-	if label == "-" {
-		height, maxWidth = 2, 6
-	}
-	width := height * float64(mask.Bounds().Dx()) / float64(mask.Bounds().Dy())
-	if width > maxWidth {
-		// 100도 높이를 줄이지 않고 가로만 맞춰 두 자리 숫자와 크기를 맞춘다.
-		width = maxWidth
+		fontScale := math.Min(10/float64(reference.Bounds().Dy()), 14/float64(reference.Bounds().Dx()))
+		width = float64(mask.Bounds().Dx()) * fontScale
+		height = float64(mask.Bounds().Dy()) * fontScale
 	}
 	scale := float64(size*4) / 16
 	w, h := int(math.Round(width*scale)), int(math.Round(height*scale))

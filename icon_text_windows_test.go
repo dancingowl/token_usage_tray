@@ -59,6 +59,52 @@ func TestWindowsNumberLayoutConsistentAcrossValues(t *testing.T) {
 	}
 }
 
+func TestWindowsNumbersPreserveFontScaleAndProportions(t *testing.T) {
+	labels := []string{"9", "99", "100"}
+	masks := make(map[string]*image.Alpha, len(labels))
+	for _, label := range labels {
+		masks[label] = renderWindowsIconText(label)
+		if masks[label] == nil {
+			t.Fatalf("GDI text rendering failed for %s", label)
+		}
+	}
+	for _, size := range []int{16, 20, 24, 32} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			previousWidth := 0
+			var referenceScale float64
+			for _, label := range labels {
+				// Inspect the native supersampled ink so final PNG rounding
+				// cannot hide a horizontal squeeze of just the widest number.
+				dst := image.NewNRGBA(image.Rect(0, 0, size*4, size*4))
+				if !drawNativeIconNumber(dst, label, colCodex, size) {
+					t.Fatalf("native rendering failed for %s", label)
+				}
+				bounds := windowsNumberInkBounds(dst)
+				raw := masks[label].Bounds()
+				if bounds.Empty() {
+					t.Fatalf("%s: missing number", label)
+				}
+				if bounds.Dx() <= previousWidth {
+					t.Errorf("%s: width %d does not increase with the number of digits (previous %d)", label, bounds.Dx(), previousWidth)
+				}
+				previousWidth = bounds.Dx()
+				// Two supersampled pixels permit edge antialiasing and integer
+				// rounding, while preserving the original GDI glyph proportions.
+				wantWidth := float64(bounds.Dy()) * float64(raw.Dx()) / float64(raw.Dy())
+				if math.Abs(float64(bounds.Dx())-wantWidth) > 2 {
+					t.Errorf("%s: distorted font proportions: ink %v, original GDI %v", label, bounds.Size(), raw.Size())
+				}
+				if label == labels[0] {
+					referenceScale = float64(bounds.Dy()) / float64(raw.Dy())
+				}
+				if math.Abs(float64(bounds.Dx())-float64(raw.Dx())*referenceScale) > 2 || math.Abs(float64(bounds.Dy())-float64(raw.Dy())*referenceScale) > 2 {
+					t.Errorf("%s: ink %v does not use the same font scale as 9", label, bounds.Size())
+				}
+			}
+		})
+	}
+}
+
 func TestWindowsGDIResourcesReleased(t *testing.T) {
 	if renderWindowsIconText("55") == nil {
 		t.Fatal("initial GDI text rendering failed")
@@ -132,8 +178,8 @@ func TestWindowsNativeNumbersFontAndSize(t *testing.T) {
 		if label == "-" && (bounds.Dx() < 3*bounds.Dy() || bounds.Dy() > 8) {
 			t.Errorf("native unknown label became a rectangle rather than a thin dash: %v", bounds)
 		}
-		if label != "-" && len(label) <= 2 && bounds.Dy() < 30 {
-			t.Errorf("%s: numeric height=%gpx, want at least 7.5px", label, float64(bounds.Dy())/4)
+		if label != "-" && bounds.Dy() < 24 {
+			t.Errorf("%s: numeric height=%gpx, want at least 6px including 100", label, float64(bounds.Dy())/4)
 		}
 	}
 }
