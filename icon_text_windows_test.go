@@ -2,11 +2,62 @@ package main
 
 import (
 	"image"
+	"math"
 	"runtime"
+	"strconv"
 	"sync"
 	"syscall"
 	"testing"
 )
+
+// Measure the emitted pixels, including antialiased edges, rather than the font
+// metrics or the renderer's requested rectangle.
+func windowsNumberInkBounds(im image.Image) image.Rectangle {
+	bounds := image.Rectangle{}
+	for y := im.Bounds().Min.Y; y < im.Bounds().Max.Y; y++ {
+		for x := im.Bounds().Min.X; x < im.Bounds().Max.X; x++ {
+			if _, _, _, a := im.At(x, y).RGBA(); a != 0 {
+				bounds = bounds.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	return bounds
+}
+
+func TestWindowsNumberLayoutConsistentAcrossValues(t *testing.T) {
+	for _, size := range []int{16, 20, 24, 32} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			// 20 is an ordinary two-digit value. Every other value, including
+			// the widest label 100, should retain its displayed cap height.
+			reference := windowsNumberInkBounds(decodeStyle(t, trayStylePNG(20, colCodex, size, iconStyleNumber), size))
+			if reference.Empty() {
+				t.Fatal("reference number has no ink")
+			}
+			for value := 0; value <= 100; value++ {
+				im := decodeStyle(t, trayStylePNG(value, colCodex, size, iconStyleNumber), size)
+				bounds := windowsNumberInkBounds(im)
+				if bounds.Empty() {
+					t.Errorf("%d: missing number", value)
+					continue
+				}
+				if bounds.Min.X < 1 || bounds.Min.Y < 1 || bounds.Max.X > size-1 || bounds.Max.Y > size-1 {
+					t.Errorf("%d: number reaches the icon boundary: %v", value, bounds)
+				}
+				if math.Abs(float64(bounds.Dy()-reference.Dy())) > 1 {
+					t.Errorf("%d: ink height %d differs from two-digit height %d", value, bounds.Dy(), reference.Dy())
+				}
+				// Half a final pixel allows unavoidable rounding on the small
+				// output grid, while detecting a visibly shifted baseline.
+				if math.Abs(float64(bounds.Min.Y+bounds.Max.Y-reference.Min.Y-reference.Max.Y)) > 1 {
+					t.Errorf("%d: vertical center differs from two-digit number: %v versus %v", value, bounds, reference)
+				}
+				if math.Abs(float64(bounds.Min.X+bounds.Max.X-size)) > 1 || math.Abs(float64(bounds.Min.Y+bounds.Max.Y-size)) > 1 {
+					t.Errorf("%d: ink is not centered in %dpx icon: %v", value, size, bounds)
+				}
+			}
+		})
+	}
+}
 
 func TestWindowsGDIResourcesReleased(t *testing.T) {
 	if renderWindowsIconText("55") == nil {
