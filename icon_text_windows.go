@@ -52,13 +52,13 @@ func drawNativeIconNumber(dst *image.NRGBA, label string, ink color.NRGBA, size 
 		cached, _ := iconTextMasks.LoadOrStore(label, mask)
 		mask = cached.(*image.Alpha)
 	}
-	height, maxWidth := 11.0, 13.0 // 16px 실제 표시에서 숫자 높이.
+	height, maxWidth := 10.0, 14.0 // 자릿수와 관계없이 같은 높이와 세로 중심을 유지한다.
 	if label == "-" {
 		height, maxWidth = 2, 6
 	}
 	width := height * float64(mask.Bounds().Dx()) / float64(mask.Bounds().Dy())
 	if width > maxWidth {
-		height *= maxWidth / width
+		// 100도 높이를 줄이지 않고 가로만 맞춰 두 자리 숫자와 크기를 맞춘다.
 		width = maxWidth
 	}
 	scale := float64(size*4) / 16
