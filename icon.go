@@ -6,7 +6,7 @@ package main
 //	macOS   : PNG 를 그대로 받는다. 메뉴바는 보통 22pt 이므로 44px(레티나) 로 그린다.
 //
 // 링 길이 = 남은 %, 링과 숫자 색 = 브랜드, 20% 미만이면 빨강.
-// 안티앨리어싱은 4배로 그려 축소하는 식으로 해결한다 — 외부 렌더 라이브러리를 쓰지 않는다.
+// 링과 비트맵 대체 글꼴은 4배로 그려 축소한다. Windows 숫자는 최종 크기에 직접 그린다.
 
 import (
 	"bytes"
@@ -167,20 +167,21 @@ func trayIcon(left int, brand color.NRGBA) []byte {
 
 func trayIconStyle(left int, brand color.NRGBA, style iconStyle) []byte {
 	if runtime.GOOS == "windows" {
-		// 32px 로 그려 넣으면 100%·150% 배율 모두 깔끔하다.
-		return pngToICO(trayStylePNG(left, brand, 32, style), 32)
+		size := 32
+		if style == iconStyleNumber {
+			size = nativeTrayIconSize()
+		}
+		return pngToICO(trayStylePNG(left, brand, size, style), size)
 	}
 	// macOS 메뉴바: 레티나 기준 44px.
 	return trayStylePNG(left, brand, 44, style)
 }
 
-// % 기호 없이 숫자를 그린다. Windows는 Segoe UI, 다른 OS는 비트맵 글꼴을 쓴다.
+// % 기호 없이 숫자를 그린다. Windows는 Tahoma 8pt를 우선 사용한다.
 func trayStylePNG(left int, brand color.NRGBA, size int, style iconStyle) []byte {
 	if style != iconStyleNumber {
 		return ringPNG(left, brand, size)
 	}
-	const ss = 4
-	big := image.NewNRGBA(image.Rect(0, 0, size*ss, size*ss))
 	label := "-"
 	if left >= 0 {
 		label = strconv.Itoa(min(left, 100))
@@ -189,9 +190,17 @@ func trayStylePNG(left int, brand color.NRGBA, size int, style iconStyle) []byte
 	if left >= 0 && left < 20 {
 		ink = colDanger
 	}
-	if label == "-" || !drawNativeIconNumber(big, label, ink, size) {
-		drawIconNumber(big, label, ink, size)
+	if label != "-" {
+		native := image.NewNRGBA(image.Rect(0, 0, size, size))
+		if drawNativeIconNumber(native, label, ink, size) {
+			var buf bytes.Buffer
+			_ = png.Encode(&buf, native)
+			return buf.Bytes()
+		}
 	}
+	const ss = 4
+	big := image.NewNRGBA(image.Rect(0, 0, size*ss, size*ss))
+	drawIconNumber(big, label, ink, size)
 	return encodeIconPNG(big, size)
 }
 

@@ -8,3 +8,5 @@ import (
 )
 
 func drawNativeIconNumber(*image.NRGBA, string, color.NRGBA, int) bool { return false }
+
+func nativeTrayIconSize() int { return 32 }

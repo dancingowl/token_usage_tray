@@ -107,13 +107,17 @@ func TestTrayIconPlatformFormat(t *testing.T) {
 		if len(data) < 22 || binary.LittleEndian.Uint16(data[2:4]) != 1 || binary.LittleEndian.Uint16(data[4:6]) != 1 {
 			t.Fatal("invalid single-image ICO header")
 		}
-		if data[6] != 32 || data[7] != 32 || binary.LittleEndian.Uint32(data[18:22]) != 22 {
-			t.Fatal("invalid 32px ICO dimensions or image offset")
+		wantSize := 32
+		if style == iconStyleNumber {
+			wantSize = nativeTrayIconSize()
+		}
+		if data[6] != byte(wantSize) || data[7] != byte(wantSize) || binary.LittleEndian.Uint32(data[18:22]) != 22 {
+			t.Fatalf("invalid %dpx ICO dimensions or image offset", wantSize)
 		}
 		if int(binary.LittleEndian.Uint32(data[14:18])) != len(data)-22 {
 			t.Fatal("ICO payload length mismatch")
 		}
-		decodeStyle(t, data[22:], 32)
+		decodeStyle(t, data[22:], wantSize)
 	}
 	if !bytes.Equal(trayIcon(19, colClaude), trayIconStyle(19, colClaude, iconStyleDonut)) {
 		t.Fatal("legacy trayIcon no longer defaults to donut")
