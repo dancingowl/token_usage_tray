@@ -35,6 +35,7 @@ fi
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/usage-tray"
+cp THIRD_PARTY_NOTICES.txt "$APP/Contents/Resources/"
 
 # 앱 아이콘 — assets/icon.png(1024) 한 장에서 굽는다. sips·iconutil 은 맥 기본 도구다.
 # 메뉴바에 뜨는 그림이 아니라 Finder·로그인 항목·'정보 가져오기' 에 뜨는 번들 아이콘이다.
@@ -53,6 +54,9 @@ fi
 BUNDLE_VERSION="${VERSION#v}"
 BUNDLE_VERSION="${BUNDLE_VERSION%%[-+]*}"
 if [ "$VERSION" = "dev" ]; then BUNDLE_VERSION="0.0.0"; fi
+GO_MINOR="$(go env GOVERSION | sed -E 's/^go1\.([0-9]+).*/\1/')"
+MINIMUM_MACOS="12.0"
+if [ "$GO_MINOR" -ge 27 ]; then MINIMUM_MACOS="13.0"; fi
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -67,13 +71,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>usage-tray</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
-  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSMinimumSystemVersion</key><string>$MINIMUM_MACOS</string>
 </dict>
 </plist>
 PLIST
 
 # 로컬 서명(ad-hoc) — 없으면 애플 실리콘에서 실행이 아예 막힌다. 배포용 공증과는 다르다.
-codesign --force --deep --sign - "$APP" 2>/dev/null || echo "codesign 실패 — 그래도 직접 빌드한 맥에서는 돈다"
+codesign --force --deep --sign - "$APP"
+codesign --verify --deep --strict "$APP"
 
 echo "빌드 완료: $APP"
 echo "실행: open $APP"

@@ -40,17 +40,16 @@ jobs:
         shell: bash
         run: ./dist/usage-tray.exe -icons dist/icons && ls dist/icons | head -3
         # 자격증명이 없는 러너에서도 도는 유일한 경로다. -once 는 '에이전트 없음' 으로 끝난다.
+      - name: Windows 배포 압축
+        shell: pwsh
+        run: Compress-Archive -Path dist/usage-tray.exe,THIRD_PARTY_NOTICES.txt -DestinationPath dist/UsageTray-windows-amd64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: usage-tray-windows-amd64
-          path: dist/usage-tray.exe
+          path: |
+            dist/usage-tray.exe
+            dist/UsageTray-windows-amd64.zip
           retention-days: 7
-      - name: 릴리스에 붙이기
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/usage-tray.exe
-
   macos:
     runs-on: macos-latest
     steps:
@@ -76,12 +75,6 @@ jobs:
           name: usage-tray-macos-universal
           path: dist/UsageTray-macos-universal.zip
           retention-days: 7
-      - name: 릴리스에 붙이기
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/UsageTray-macos-universal.zip
-
   check:
     runs-on: ubuntu-latest
     steps:
@@ -95,3 +88,32 @@ jobs:
           files="$(git ls-files '*.go' | grep -v '^vendor/')"
           test -z "$(gofmt -l $files)" || { echo '서식 불일치:'; gofmt -l $files; exit 1; }
           go vet ./...
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: usage-tray-*
+          path: dist
+          merge-multiple: true
+      - name: 배포 파일과 안내 확인
+        run: |
+          test -s dist/usage-tray.exe
+          test -s dist/UsageTray-windows-amd64.zip
+          test -s dist/UsageTray-macos-universal.zip
+          test -s "docs/releases/${GITHUB_REF_NAME}.md"
+      - name: 릴리스 게시
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Usage Tray ${{ github.ref_name }}
+          body_path: docs/releases/${{ github.ref_name }}.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/usage-tray.exe
+            dist/UsageTray-windows-amd64.zip
+            dist/UsageTray-macos-universal.zip
+            THIRD_PARTY_NOTICES.txt

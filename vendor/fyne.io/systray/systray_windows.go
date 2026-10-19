@@ -853,9 +853,8 @@ func (t *winTray) loadIconFrom(src string) (windows.Handle, error) {
 		return 0, ErrTrayNotReadyYet
 	}
 
-	const IMAGE_ICON = 1               // Loads an icon
+	const IMAGE_ICON = 1              // Loads an icon
 	const LR_LOADFROMFILE = 0x00000010 // Loads the stand-alone image from the file
-	const LR_DEFAULTSIZE = 0x00000040  // Loads default-size icon for windows(SM_CXICON x SM_CYICON) if cx, cy are set to zero
 
 	// Save and reuse handles of loaded images
 	t.muLoadedImages.RLock()
@@ -866,13 +865,15 @@ func (t *winTray) loadIconFrom(src string) (windows.Handle, error) {
 		if err != nil {
 			return 0, err
 		}
+		// Zero dimensions without LR_DEFAULTSIZE preserve the source ICO size.
+		// Enlarging to SM_CXICON here would make the Shell rescale tray pixels.
 		res, _, err := pLoadImage.Call(
 			0,
 			uintptr(unsafe.Pointer(srcPtr)),
 			IMAGE_ICON,
 			0,
 			0,
-			LR_LOADFROMFILE|LR_DEFAULTSIZE,
+			LR_LOADFROMFILE,
 		)
 		if res == 0 {
 			return 0, err

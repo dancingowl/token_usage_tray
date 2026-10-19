@@ -24,8 +24,7 @@ go version
 macOS 실행 가능 버전은 사용한 Go 툴체인의 공식 요건에 따라 달라집니다.
 Go 1.26은 macOS 12 Monterey 이상, Go 1.27부터는 macOS 13 Ventura 이상이 필요합니다.
 근거: [Go 최소 요건](https://go.dev/wiki/MinimumRequirements), [Go 1.26 Darwin 안내](https://go.dev/doc/go1.26#darwin).
-`build.sh`의 `LSMinimumSystemVersion=11.0`은 이 요건과 일치하지 않으며 macOS 11 실행을 보장하지 않습니다.
-번들 메타데이터와 툴체인 지원 범위는 후속 정합성 점검이 필요합니다.
+`build.sh`는 Go 1.26에서 번들 최소 버전을 12.0, Go 1.27 이상에서 13.0으로 지정하고 ad-hoc 서명을 검증합니다. 툴체인을 올릴 때 공식 최소 요건도 함께 확인합니다.
 
 ## Windows 빌드와 기본 검증
 
@@ -217,4 +216,6 @@ Windows는 `powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version v1.2.3
 현재 개발 브랜치의 일반 push만으로 실행되는 설정은 아닙니다. CI는 Go `stable`을 사용하므로 툴체인·OS 요건을 함께 확인합니다.
 Windows는 앱·vendor 테스트와 아이콘 생성 스모크, macOS는 앱 테스트·유니버설 번들·아이콘 스모크를 수행합니다.
 별도 Linux job은 vendor를 제외한 Go 파일 서식과 `go vet ./...`를 검사합니다.
-Windows exe·macOS zip artifact는 7일 보관하고 `v*` 태그에서는 릴리스에 첨부합니다. 태그 빌드는 태그명을 버전으로 사용합니다.
+Windows exe·zip과 macOS zip artifact는 7일 보관합니다. `v*` 태그에서는 Windows·macOS·정적 검사가 모두 성공한 뒤 별도 `release` job이 배포 파일과 제삼자 고지를 함께 게시합니다. 태그 빌드는 태그명을 버전으로 사용합니다.
+
+릴리스할 때는 `docs/releases/vX.Y.Z.md`에 해당 버전의 배포 안내를 작성해 main에 반영하고, 검증한 커밋에 `vX.Y.Z` 태그를 만들어 push합니다. 워크플로가 안내 파일과 배포 파일을 확인한 뒤 GitHub Release를 생성합니다. 이미 게시한 태그를 다른 커밋으로 이동하지 않습니다. 의존성·아이콘 라이선스가 바뀌면 `THIRD_PARTY_NOTICES.txt`도 갱신합니다. Windows zip과 macOS 앱 번들에는 이 고지가 포함됩니다.

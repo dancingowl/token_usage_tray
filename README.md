@@ -17,7 +17,12 @@ Claude Code·Codex·Antigravity의 **남은 사용 한도와 초기화 시각**�
 
 ## 빠른 시작
 
-아래 예시는 저장소의 기본 브랜치 **`main`**을 사용합니다. 배포 파일은 [Releases](https://github.com/dancingowl/token_usage_tray/releases)에 공개된 버전을 확인하고, 릴리스가 없으면 소스에서 빌드합니다.
+실행 파일을 내려받으면 Go나 Node.js 설치 없이 사용할 수 있습니다.
+
+- **Windows x64:** [UsageTray-windows-amd64.zip](https://github.com/dancingowl/token_usage_tray/releases/latest/download/UsageTray-windows-amd64.zip)을 계속 사용할 폴더에 풀고 `usage-tray.exe`를 실행합니다.
+- **macOS Apple Silicon / Intel:** [UsageTray-macos-universal.zip](https://github.com/dancingowl/token_usage_tray/releases/latest/download/UsageTray-macos-universal.zip)을 풀고 `UsageTray.app`을 응용 프로그램 폴더로 옮겨 실행합니다.
+
+변경 내용과 버전별 파일은 [Releases](https://github.com/dancingowl/token_usage_tray/releases)에서 확인합니다. 아래 소스 빌드 예시는 기본 브랜치 **`main`**을 사용합니다.
 
 ### Windows에서 빌드하고 실행
 
