@@ -8,7 +8,7 @@ import (
 func TestTraySettingsDefaultAndRoundTrip(t *testing.T) {
 	t.Setenv("USAGE_TRAY_DATA_DIR", t.TempDir())
 	settings, err := loadTraySettings()
-	if err != nil || settings.IconStyle != iconStyleDonut {
+	if err != nil || settings.IconStyle != iconStyleDonut || settings.Theme != "system" || settings.AlertsPausedUntil != 0 {
 		t.Fatalf("missing settings: %+v, %v", settings, err)
 	}
 	for _, style := range []iconStyle{iconStyleNumber, iconStyleDonut} {
@@ -21,6 +21,27 @@ func TestTraySettingsDefaultAndRoundTrip(t *testing.T) {
 		if err != nil || loaded.IconStyle != style {
 			t.Fatalf("saved %q, loaded %+v: %v", style, loaded, err)
 		}
+	}
+}
+
+func TestThemeAndPauseSettingsValidation(t *testing.T) {
+	for _, theme := range []string{"system", "light", "dark", ""} {
+		s := defaultTraySettings()
+		s.Theme = theme
+		s.AlertsPausedUntil = 2000000000
+		if err := validateTraySettings(s); err != nil {
+			t.Fatalf("valid theme/pause: %v", err)
+		}
+	}
+	s := defaultTraySettings()
+	s.Theme = "unsupported"
+	if validateTraySettings(s) == nil {
+		t.Fatal("invalid theme accepted")
+	}
+	s = defaultTraySettings()
+	s.AlertsPausedUntil = -1
+	if validateTraySettings(s) == nil {
+		t.Fatal("negative pause timestamp accepted")
 	}
 }
 

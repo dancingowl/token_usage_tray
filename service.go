@@ -24,6 +24,7 @@ type agentStatus struct {
 	Source      string     `json:"source"`
 	LastSuccess *time.Time `json:"last_success"`
 	AgeMinutes  int        `json:"age_minutes"`
+	NextQueryAt *time.Time `json:"next_query_at,omitempty"`
 	Error       string     `json:"error"`
 }
 
@@ -42,7 +43,7 @@ func safeAgentError(err string) string {
 }
 
 func statusForAgent(name string, u AgentUsage, now time.Time) agentStatus {
-	v := agentStatus{Name: name, Status: "waiting", Label: "수집 대기", Source: u.Src, AgeMinutes: -1, Error: safeAgentError(u.Error)}
+	v := agentStatus{Name: name, Status: "waiting", Label: "수집 대기", Source: u.Src, AgeMinutes: -1, Error: safeAgentError(u.Error), NextQueryAt: agentNextQuery(name)}
 	if !u.FetchedAt.IsZero() {
 		at := u.FetchedAt
 		v.LastSuccess = &at
@@ -86,6 +87,20 @@ func appHTTPHandler() http.Handler {
 		}
 		s := sanitizedState(mergedState())
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if view == "tokens" {
+			query, err := url.ParseQuery(r.URL.RawQuery)
+			if err != nil {
+				apiError(w, 400, "필터 요청을 읽지 못했습니다")
+				return
+			}
+			options, err := parseTokenViewOptions(query)
+			if err != nil {
+				apiError(w, 400, err.Error())
+				return
+			}
+			fmt.Fprint(w, renderPageViewWithTokenOptions(&s, mergedTokenView(options), view, options))
+			return
+		}
 		fmt.Fprint(w, renderPageView(&s, mergedTokens(), view))
 	})
 	mux.HandleFunc("/state.json", func(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +111,12 @@ func appHTTPHandler() http.Handler {
 		writeJSON(w, sanitizedState(mergedState()))
 	})
 	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+		unlock, err := acquireSettingsMutation()
+		if err != nil {
+			apiError(w, 500, "설정 파일을 잠그지 못했습니다")
+			return
+		}
+		defer unlock()
 		s, err := loadTraySettings()
 		if err != nil {
 			apiError(w, 500, "설정 파일을 읽지 못했습니다")
@@ -108,9 +129,13 @@ func appHTTPHandler() http.Handler {
 			if !allowMutation(w, r) {
 				return
 			}
+			theme := s.Theme
 			if !readJSON(w, r, &s) {
 				return
 			}
+			// Theme changes are saved immediately through /api/theme. A stale
+			// settings form must not replace that independently saved preference.
+			s.Theme = theme
 			if err := validateTraySettings(s); err != nil {
 				apiError(w, 400, err.Error())
 				return
@@ -124,6 +149,66 @@ func appHTTPHandler() http.Handler {
 			apiError(w, 405, "GET 또는 PUT 요청만 지원합니다")
 		}
 	})
+	mux.HandleFunc("/api/theme", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodPut {
+			apiError(w, 405, "GET 또는 PUT 요청만 지원합니다")
+			return
+		}
+		if r.Method == http.MethodPut && !allowMutation(w, r) {
+			return
+		}
+		unlock, err := acquireSettingsMutation()
+		if err != nil {
+			apiError(w, 500, "설정 파일을 잠그지 못했습니다")
+			return
+		}
+		defer unlock()
+		s, err := loadTraySettings()
+		if err != nil {
+			apiError(w, 500, "설정 파일을 읽지 못했습니다")
+			return
+		}
+		if r.Method == http.MethodPut {
+			var body struct {
+				Theme string `json:"theme"`
+			}
+			if !readJSON(w, r, &body) {
+				return
+			}
+			switch body.Theme {
+			case "system", "light", "dark":
+			default:
+				apiError(w, 400, "테마는 시스템, 밝게 또는 어둡게여야 합니다")
+				return
+			}
+			s.Theme = body.Theme
+			if err := saveTraySettings(s); err != nil {
+				apiError(w, 500, "설정을 저장하지 못했습니다")
+				return
+			}
+		}
+		theme := s.Theme
+		if theme == "" {
+			theme = "system"
+		}
+		writeJSON(w, map[string]string{"theme": theme})
+	})
+	mux.HandleFunc("/api/meta", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			apiError(w, 405, "GET 요청만 지원합니다")
+			return
+		}
+		settings, err := loadTraySettings()
+		if err != nil {
+			apiError(w, 500, "설정 파일을 읽지 못했습니다")
+			return
+		}
+		theme := settings.Theme
+		if theme == "" {
+			theme = "system"
+		}
+		writeJSON(w, map[string]string{"instance_id": dashboardInstanceID(), "version": appVersion, "ui_revision": dashboardUIRevision(), "theme": theme})
+	})
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			apiError(w, 405, "GET 요청만 지원합니다")
@@ -131,7 +216,7 @@ func appHTTPHandler() http.Handler {
 		}
 		s := mergedState()
 		now := time.Now()
-		writeJSON(w, map[string]any{"agents": []agentStatus{statusForAgent("Claude", s.Claude, now), statusForAgent("Codex", s.Codex, now), statusForAgent("Antigravity", s.Antigravity, now)}, "refreshing": collectingRefresh.Load(), "scanning": collectingTokens.Load()})
+		writeJSON(w, map[string]any{"agents": []agentStatus{statusForAgent("Claude", s.Claude, now), statusForAgent("Codex", s.Codex, now), statusForAgent("Antigravity", s.Antigravity, now)}, "refreshing": collectingRefresh.Load(), "scanning": collectingTokens.Load(), "refresh": currentRefreshJob()})
 	})
 	mux.HandleFunc("/api/actions", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -151,6 +236,15 @@ func appHTTPHandler() http.Handler {
 		case "refresh", "detail", "settings":
 		default:
 			apiError(w, 400, "지원하지 않는 동작입니다")
+			return
+		}
+		if body.Action == "refresh" {
+			job, ok := enqueueRefreshAction(time.Now())
+			if !ok {
+				apiError(w, 409, "앞선 동작을 처리하고 있습니다")
+				return
+			}
+			writeJSON(w, map[string]any{"ok": true, "refresh": job})
 			return
 		}
 		select {

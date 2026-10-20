@@ -41,8 +41,13 @@ func (tip *trackingTooltip) configureCardStyle() {
 	if int32(result) < 0 {
 		log.Printf("systray error: unable to customize tooltip theme: HRESULT %#x", result)
 	}
-	pSendMessage.Call(uintptr(tip.window), 0x0400+19, clickTipBackground, 0) // TTM_SETTIPBKCOLOR
-	pSendMessage.Call(uintptr(tip.window), 0x0400+20, clickTipTextColor, 0)  // TTM_SETTIPTEXTCOLOR
+	tip.configureCardColors()
+}
+
+func (tip *trackingTooltip) configureCardColors() {
+	colors := tip.cardColors()
+	pSendMessage.Call(uintptr(tip.window), 0x0400+19, colors.background, 0) // TTM_SETTIPBKCOLOR
+	pSendMessage.Call(uintptr(tip.window), 0x0400+20, colors.text, 0)       // TTM_SETTIPTEXTCOLOR
 }
 
 func clickTooltipFont(dpi uintptr) tooltipLogFont {

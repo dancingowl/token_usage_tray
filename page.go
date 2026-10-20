@@ -178,8 +178,8 @@ type gaugeCard struct {
 	Mark    agentMark
 }
 
-// 14일 막대 차트 — HTML/CSS. 텍스트가 축소되지 않는 것이 SVG 대신 쓰는 이유다.
-func barChartHTML(days []DayRow, brand color.NRGBA, valueOf func(DayRow) int64) string {
+// 선택 기간의 막대 차트 — HTML/CSS. 텍스트가 축소되지 않는 것이 SVG 대신 쓰는 이유다.
+func barChartHTML(days []DayRow, brand color.NRGBA, valueOf func(DayRow) int64, agent string) string {
 	var max int64 = 1
 	vals := make([]int64, len(days))
 	for i, d := range days {
@@ -211,17 +211,26 @@ func barChartHTML(days []DayRow, brand color.NRGBA, valueOf func(DayRow) int64) 
 		if i == len(vals)-1 {
 			cls += " is-today"
 		}
-		// 날짜는 14일을 빠짐없이 적는다. 붙어 보이지 않게 앞의 0 을 떼어 9/18 꼴로 쓰고,
-		// 칸이 정말 좁은 화면(휴대폰 폭)에서만 CSS 가 .sec 을 숨긴다.
-		md := days[i].Day[5:] // "09-18"
-		label := strings.TrimLeft(md[:2], "0") + "/" + md[3:]
+		// Keep every bar inspectable; on narrow screens label at most seven
+		// evenly spaced dates, including both endpoints, instead of overlapping.
+		label := days[i].Day
+		if day, err := time.Parse("2006-01-02", days[i].Day); err == nil {
+			label = day.Format("1/02")
+		}
 		xcls := "ch-x"
-		if i%2 == 0 && i != len(vals)-1 {
+		mobileTick := len(vals) <= 7
+		for tick := 0; !mobileTick && tick < 7; tick++ {
+			mobileTick = i == (tick*(len(vals)-1)+3)/6
+		}
+		if !mobileTick {
 			xcls += " sec"
 		}
-		fmt.Fprintf(&b, `<div class="ch-col" title="%s · %s"><div class="ch-track">`+
+		fmt.Fprintf(&b, `<div class="ch-col" tabindex="0" aria-label="%s %s, 총 %d 토큰" data-agent="%s" data-day="%s" data-total="%d" data-input="%d" data-output="%d" data-cache-read="%d" data-cache-create="%d" data-requests="%d"><div class="ch-track">`+
 			`<div class="%s" style="height:%.1f%%"></div></div><div class="%s">%s</div></div>`,
-			html.EscapeString(days[i].Day), fmtTokens(v), cls, h, xcls, label)
+			html.EscapeString(days[i].Day), html.EscapeString(agent), v,
+			html.EscapeString(agent), html.EscapeString(days[i].Day), v,
+			days[i].Input, days[i].Output, days[i].CacheRead, days[i].CacheCreate, days[i].Requests,
+			cls, h, xcls, html.EscapeString(label))
 	}
 
 	b.WriteString(`</div></div>`)
@@ -292,7 +301,11 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .ch-col{flex:1;display:flex;flex-direction:column;min-width:0}
 .ch-track{flex:1;display:flex;align-items:flex-end}
 .ch-bar{width:100%;background:var(--brand);opacity:.45;border-radius:3px 3px 0 0;min-height:2px}
-.ch-bar.is-today{opacity:.9}.ch-col:hover .ch-bar{opacity:.8}
+.ch-bar.is-today{opacity:.9}.ch-col:hover .ch-bar,.ch-col:focus-visible .ch-bar,.ch-col.is-inspected .ch-bar{opacity:1}
+.ch-col:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.token-tooltip{position:fixed;z-index:20;pointer-events:none;width:260px;max-width:calc(100vw - 24px);box-sizing:border-box;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 4px 18px #20293820;color:var(--tx);font-size:12px;font-variant-numeric:tabular-nums}
+.token-tooltip-title{margin:0 0 8px;color:var(--sub)}.token-tooltip-total{display:block;font-size:20px;font-weight:700;line-height:1.3;margin-bottom:12px}.token-tooltip-total span{font-size:12px;font-weight:400;color:var(--sub);margin-left:4px}
+.token-tooltip dl{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin:0}.token-tooltip dt{color:var(--sub)}.token-tooltip dd{margin:0;text-align:right}
 .ch-x{height:24px;line-height:24px;text-align:center;font-size:10px;color:var(--dim);letter-spacing:-.3px;white-space:nowrap}
 .stats{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:14px}
 .stat{padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
@@ -343,6 +356,15 @@ func renderPage(s *State, tok *TokenStats) string {
 }
 
 func renderPageView(s *State, tok *TokenStats, view string) string {
+	options := tokenViewOptions{Days: 14}
+	if tok != nil && tok.ViewDays != 0 {
+		options.Days, options.All = tok.ViewDays, tok.AllRows
+	}
+	return renderPageViewWithTokenOptions(s, tok, view, options)
+}
+
+func renderPageViewWithTokenOptions(s *State, tok *TokenStats, view string, options tokenViewOptions) string {
+	options = defaultTokenViewOptions(options)
 	pageTitle := "한도 현황"
 	switch view {
 	case "tokens":
@@ -355,9 +377,11 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 	var b strings.Builder
 	b.WriteString(`<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
+<meta name="usage-tray-instance" content="` + html.EscapeString(dashboardInstanceID()) + `">
+<meta name="usage-tray-ui" content="` + html.EscapeString(dashboardUIRevision()) + `">
 <link rel="icon" href="data:image/png;base64,` + base64.StdEncoding.EncodeToString(faviconPNG) + `">
-<title>Usage Tray · ` + pageTitle + `</title><style>` + pageCSS + dashboardCSS + `</style></head><body data-page="` + view + `">`)
+<title>Usage Tray · ` + pageTitle + `</title>` + themeScriptTag() + `<style>` + pageCSS + dashboardCSS + tokenControlsCSS + themeCSS + themeControlCSS + `</style></head><body data-page="` + view + `">`)
 
 	fmt.Fprintf(&b, `<header><div class="header-top"><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
 		`<h1>Usage Tray</h1><span class="app-version" id="app-version" aria-label="현재 버전">%s</span></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div>`,
@@ -392,7 +416,7 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 		b.WriteString(`<p class="none">Antigravity는 모델별 잔여 한도와 리셋 시각을 표시합니다. 토큰 수와 과거 사용량은 제공되지 않습니다.</p>`)
 	}
 	dashboard := strings.NewReplacer("{{APP_VERSION}}", html.EscapeString(appVersion), "{{RELEASES_URL}}", releasesPageURL).Replace(dashboardHTML)
-	b.WriteString(`</section>` + dashboard + `<section id="token-details" class="token-details panel dashboard-full" aria-labelledby="token-title"><h2 id="token-title">토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></h2><section id="token-snapshot">`)
+	b.WriteString(`</section>` + dashboard + `<section id="token-details" class="token-details panel dashboard-full" aria-labelledby="token-title"><h2 id="token-title">토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></h2>` + tokenControlsHTML(tok, options) + `<section id="token-snapshot">`)
 	if tok == nil {
 		b.WriteString(`<div class="panel none">토큰 집계가 아직 없습니다. 첫 스캔이 끝나면 채워집니다.</div></section></section>` + dashboardScriptTag() + `</body></html>`)
 		return b.String()
@@ -400,14 +424,14 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 
 	b.WriteString(`<div class="row two">`)
 	if s.Claude.Available {
-		fmt.Fprintf(&b, `<div class="panel"><h2>%sClaude · 14일 토큰 (입력+캐시+출력)</h2>%s</div>`,
-			agentIcon(markClaude, "sm"),
-			barChartHTML(tok.Claude.Days14, colClaude, func(d DayRow) int64 { return d.total() }))
+		fmt.Fprintf(&b, `<div class="panel"><h2>%sClaude · %d일 토큰 (입력+캐시+출력)</h2>%s</div>`,
+			agentIcon(markClaude, "sm"), options.Days,
+			barChartHTML(tok.Claude.Days14, colClaude, func(d DayRow) int64 { return d.total() }, "Claude"))
 	}
 	if s.Codex.Available {
-		fmt.Fprintf(&b, `<div class="panel"><h2>%sCodex · 14일 토큰 (입력+출력)</h2>%s</div>`,
-			agentIcon(markCodex, "sm"),
-			barChartHTML(tok.Codex.Days14, colCodex, func(d DayRow) int64 { return d.Input + d.Output }))
+		fmt.Fprintf(&b, `<div class="panel"><h2>%sCodex · %d일 토큰 (입력+출력)</h2>%s</div>`,
+			agentIcon(markCodex, "sm"), options.Days,
+			barChartHTML(tok.Codex.Days14, colCodex, func(d DayRow) int64 { return d.Input + d.Output }, "Codex"))
 	}
 	b.WriteString(`</div>`)
 
@@ -434,14 +458,16 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 
 	b.WriteString(`<div class="row two">`)
 
-	models := mergeModels(s, tok)
-	b.WriteString(`<div class="panel"><h2>모델별 · 7일</h2><div class="table-scroll"><table>` +
-		`<tr><th>모델</th><th class="num">요청</th><th class="num">입력</th>` +
-		`<th class="num">출력</th><th class="num">캐시</th></tr>`)
+	models := mergeModelsView(s, tok, options.All)
+	fmt.Fprintf(&b, `<div class="panel"><h2>모델별 · %d일</h2><div class="table-scroll"><table>`+
+		`<tr><th>모델</th><th class="num">요청</th><th class="num">입력</th>`+
+		`<th class="num">출력</th><th class="num">캐시</th></tr>`, options.Days)
 	for _, m := range models {
+		linkOptions := options
+		linkOptions.Model = m.Name
 		fmt.Fprintf(&b, `<tr><td class="name">%s</td><td class="num">%d</td>`+
 			`<td class="num">%s</td><td class="num">%s</td><td class="num">%d%%</td></tr>`,
-			modelCell(m), m.Requests,
+			`<a href="`+html.EscapeString(tokenViewURL(linkOptions))+`">`+modelCell(m)+`</a>`, m.Requests,
 			fmtTokens(m.Input+m.CacheCreate), fmtTokens(m.Output), m.hitPct())
 	}
 	b.WriteString(`<tfoot>`)
@@ -453,13 +479,15 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 	}
 	b.WriteString(`</tfoot></table></div></div>`)
 
-	projects := mergeProjects(s, tok)
-	b.WriteString(`<div class="panel"><h2>프로젝트별 · 7일</h2><div class="table-scroll"><table class="projects-table">` +
-		`<tr><th>프로젝트</th><th></th><th class="num">요청</th><th class="num">토큰</th></tr>`)
+	projects := mergeProjectsView(s, tok, options.All)
+	fmt.Fprintf(&b, `<div class="panel"><h2>프로젝트별 · %d일</h2><div class="table-scroll"><table class="projects-table">`+
+		`<tr><th>프로젝트</th><th></th><th class="num">요청</th><th class="num">토큰</th></tr>`, options.Days)
 	for _, p := range projects {
+		linkOptions := options
+		linkOptions.Project = p.Name
 		fmt.Fprintf(&b, `<tr><td class="plain" title="%s">%s</td><td class="who">%s</td>`+
 			`<td class="num">%d</td><td class="num">%s</td></tr>`,
-			html.EscapeString(p.Name), html.EscapeString(p.Name),
+			html.EscapeString(p.Name), `<a href="`+html.EscapeString(tokenViewURL(linkOptions))+`">`+html.EscapeString(p.Name)+`</a>`,
 			marksHTML(p.marks), p.Requests, fmtTokens(p.total()))
 	}
 	b.WriteString(`<tfoot>`)
@@ -470,9 +498,8 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 	}
 	b.WriteString(`</tfoot></table></div></div></div>`)
 
-	fmt.Fprintf(&b, `<footer>집계 %s · %dms · 출처 Claude %s / Codex %s</footer>`,
-		tok.Updated.Local().Format("2006-01-02 15:04:05"), tok.ScanMs,
-		html.EscapeString(orDash(s.Claude.Src)), html.EscapeString(orDash(s.Codex.Src)))
+	fmt.Fprintf(&b, `<footer>마지막 집계 %s</footer>`,
+		tok.Updated.Local().Format("2006-01-02 15:04:05"))
 
 	b.WriteString(`</section></section>` + dashboardScriptTag() + `</body></html>`)
 	return b.String()
@@ -624,6 +651,10 @@ type totalRow struct {
 }
 
 func mergeModels(s *State, tok *TokenStats) []projRow {
+	return mergeModelsView(s, tok, false)
+}
+
+func mergeModelsView(s *State, tok *TokenStats, all bool) []projRow {
 	var out []projRow
 	if s.Claude.Available {
 		for _, m := range tok.Claude.Models7d {
@@ -636,7 +667,7 @@ func mergeModels(s *State, tok *TokenStats) []projRow {
 		}
 	}
 	sortRows(out)
-	if len(out) > 6 {
+	if !all && len(out) > 6 {
 		out = out[:6]
 	}
 	return out
@@ -665,7 +696,7 @@ func marksHTML(marks []agentMark) string {
 	return b.String()
 }
 
-// 합계 — 표에 보이는 상위 6개가 아니라 7일 창의 전체 합이다(AgentTokens.Total7d).
+// 합계 — 표에 보이는 상위 6개가 아니라 선택 기간의 전체 합이다(AgentTokens.Total7d).
 // 옛 tokens.json 캐시에는 그 값이 없으므로, 0 이면 보이는 줄의 합으로 메운다.
 func agentTotals(s *State, tok *TokenStats, shown []projRow) []totalRow {
 	var out []totalRow
@@ -716,6 +747,10 @@ func sumShown(shown []projRow, who string) Row {
 // 갈려 보여서 한눈에 "이 프로젝트에 얼마 썼나" 가 안 나왔다. 합쳐서 한 줄로 내고 어느
 // 에이전트가 쓰였는지는 마크로 보인다.
 func mergeProjects(s *State, tok *TokenStats) []projRow {
+	return mergeProjectsView(s, tok, false)
+}
+
+func mergeProjectsView(s *State, tok *TokenStats, all bool) []projRow {
 	byName := map[string]*projRow{}
 	var order []string
 	take := func(rows []NamedRow, mark agentMark) {
@@ -742,7 +777,7 @@ func mergeProjects(s *State, tok *TokenStats) []projRow {
 		out = append(out, *byName[name])
 	}
 	sortRows(out)
-	if len(out) > 6 {
+	if !all && len(out) > 6 {
 		out = out[:6]
 	}
 	return out

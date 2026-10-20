@@ -133,6 +133,7 @@ type tooltipToolInfo struct {
 }
 
 type trackingTooltip struct {
+	palette       clickThemePalette
 	window        windows.Handle
 	tool          tooltipToolInfo
 	text          clickTooltipBuffer
@@ -286,7 +287,7 @@ func (t *winTray) newClickTooltip() (*trackingTooltip, error) {
 	if hwnd == 0 {
 		return nil, fmt.Errorf("create tooltip: %w", err)
 	}
-	tip := &trackingTooltip{window: windows.Handle(hwnd)}
+	tip := &trackingTooltip{window: windows.Handle(hwnd), palette: t.clickTooltipColors()}
 	// The control retains lpszText beyond SendMessage. Pin the fixed backing
 	// array until DestroyWindow, instead of retaining a movable Go pointer.
 	tip.pinner.Pin(&tip.text[0])
@@ -385,6 +386,8 @@ func (t *winTray) showClickTooltip(cursor point) error {
 		}
 	}
 	tip := t.clickTooltip
+	tip.palette = t.clickTooltipColors()
+	tip.configureCardColors()
 	tip.anchor = cursor
 	tip.rows = rows
 	tip.text = text

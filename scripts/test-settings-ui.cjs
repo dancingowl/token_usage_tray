@@ -24,7 +24,7 @@ const baseURL = process.env.BASE_URL || 'http://127.0.0.1:47113';
 const keys = ['claude5h', 'claude7d', 'codex5h', 'codex7d', 'antigravity'];
 const clone = value => JSON.parse(JSON.stringify(value));
 const baseline = () => ({
-  icon_style: 'donut', display_window: 'week', poll_seconds: 180,
+  icon_style: 'donut', display_window: 'week', poll_seconds: 180, theme: 'system',
   visible_agents: { claude: true, codex: true, antigravity: false },
   alerts_enabled: true, notify_limits: true,
   alert_rules: Object.fromEntries(keys.map((key, index) => [key, {
@@ -53,9 +53,17 @@ async function fixture(browser, options = {}) {
         if (method === 'GET') return reply(state.settings);
         if (method === 'PUT') {
           if (state.failSettings) { state.failSettings--; return reply({ error: 'fixture settings failure' }, 500); }
-          state.settings = clone(request.postDataJSON()); return reply(state.settings);
+          state.settings = { ...clone(request.postDataJSON()), theme: state.settings.theme }; return reply(state.settings);
         }
       }
+      if (url.pathname === '/api/theme') {
+        if (method === 'GET') return reply({ theme: state.settings.theme });
+        if (method === 'PUT') {
+          if (state.failTheme) { state.failTheme--; return reply({ error: 'fixture theme failure' }, 500); }
+          state.settings.theme = request.postDataJSON().theme; return reply({ theme: state.settings.theme });
+        }
+      }
+      if (url.pathname === '/api/meta') return reply({ instance_id: 'settings-fixture', ui_revision: 'settings-fixture', theme: state.settings.theme });
       if (url.pathname === '/api/startup') {
         if (method === 'GET') return reply(state.startup, state.failStartupRead ? 500 : 200);
         if (method === 'POST') {
@@ -100,9 +108,10 @@ async function save(page) {
   await page.locator('#save-settings').click();
   await page.waitForFunction(() => document.querySelector('#settings-form').getAttribute('aria-busy') !== 'true');
 }
-async function advanced(page) {
-  if (!await page.locator('#advanced-settings').evaluate(el => el.open))
-    await page.locator('#advanced-settings > summary').click();
+async function selectTheme(page, theme) {
+  await page.locator('#theme-toggle').click();
+  await page.locator(`[data-theme-choice="${theme}"]`).click();
+  await enabled(page, '#theme-toggle', true);
 }
 async function main() {
   const screenshotDirectory = process.env.SCREENSHOT_DIR && path.resolve(process.env.SCREENSHOT_DIR);
@@ -122,10 +131,16 @@ async function main() {
       assert.equal(await page.locator('#settings-form #startup-enabled').count(), 1);
       assert.equal((await page.locator('#save-settings').textContent()).trim(), '저장');
       assert.equal((await page.locator('#reset-settings').textContent()).trim(), '변경 취소');
-      assert.equal(await page.locator('#advanced-settings').evaluate(el => el.open), false);
-      assert.equal(await page.locator('#system-details').evaluate(el => el.tagName), 'DETAILS');
-      assert.equal(await page.locator('#system-details').evaluate(el => el.open), false);
-      assert.match(await page.locator('#system-details > summary').textContent(), /앱 정보/);
+      assert.equal(await page.locator('#settings details, #advanced-settings, #other-alerts, #theme-setting, [name="theme"]').count(), 0);
+      assert.equal(await page.locator('#system-details').evaluate(el => el.tagName), 'SECTION');
+      assert.match(await page.locator('#system-details h2#system-title').textContent(), /앱 정보/);
+      assert.equal(await page.locator('#poll-help').evaluate(el => el.tagName), 'P');
+      assert.equal(await page.locator('#poll-help').isVisible(), true);
+      assert.equal(await page.locator('#poll-minutes').isVisible(), true);
+      assert.match(await page.locator('#poll-minutes').locator('xpath=ancestor::section[1]').textContent(), /일반/);
+      assert.equal(await page.locator('header #theme-toggle').count(), 1);
+      assert.equal(await page.locator('#theme-menu').getAttribute('role'), 'menu');
+      assert.equal(await page.locator('#theme-menu [role="menuitemradio"][data-theme-choice]').count(), 3);
       await enabled(page, '#save-settings', false);
       await page.locator('#settings-form').evaluate(form => form.requestSubmit());
       assert.deepEqual(state.mutations, [], 'unchanged form submission is a no-op');
@@ -150,9 +165,9 @@ async function main() {
       await enabled(page, '#save-settings', false);
       assert.deepEqual(state.mutations, [{ path: '/api/startup', method: 'POST', body: { enabled: true } }]);
     });
-    await test('settings-only save preserves hidden rules and interval', {}, async ({ page, state }) => {
+    await test('settings-only save preserves all service rules and interval', {}, async ({ page, state }) => {
       const originalRules = clone(state.settings.alert_rules);
-      await advanced(page); await field(page, 'poll_minutes').fill('2.5');
+      await field(page, 'poll_minutes').fill('2.5');
       assert.equal(await field(page, 'poll_minutes').getAttribute('min'), '1');
       assert.equal(await field(page, 'poll_minutes').getAttribute('max'), '60');
       assert.equal(await field(page, 'poll_minutes').getAttribute('step'), 'any');
@@ -164,7 +179,6 @@ async function main() {
       await field(page, 'poll_minutes').fill('2.5'); await enabled(page, '#save-settings', false);
     });
     await test('custom integer seconds survive unrelated save', { settings: { ...baseline(), poll_seconds: 61 } }, async ({ page, state }) => {
-      await advanced(page);
       assert.equal(Math.round(Number(await field(page, 'poll_minutes').inputValue()) * 60), 61);
       await page.locator('input[name="icon_style"][value="number"]').check(); await save(page);
       await enabled(page, '#save-settings', false); assert.equal(state.settings.poll_seconds, 61);
@@ -211,21 +225,50 @@ async function main() {
       assert.deepEqual(state.mutations, [1, 2].map(() => ({ path: '/api/startup', method: 'POST', body: { enabled: true } })));
       assert.equal(state.startup.enabled, true);
     });
-    await test('invalid hidden rule reveals disclosure and focuses input without mutation', {}, async ({ page, state }) => {
-      await page.waitForFunction(() => document.querySelector('#other-alerts [name="claude5h_threshold"]'));
-      await page.locator('#other-alerts > summary').click();
+    await test('invalid disconnected service rule focuses visible input without mutation', {}, async ({ page, state }) => {
+      await page.waitForFunction(() => document.querySelector('#alert-rules .alert-service[data-agent="claude"] [name="claude5h_threshold"]'));
+      assert.equal(await field(page, 'claude5h_threshold').isVisible(), true);
       await field(page, 'claude5h_threshold').fill('100');
-      await page.locator('#other-alerts > summary').click();
-      assert.equal(await page.locator('#other-alerts').evaluate(el => el.open), false);
       await page.locator('#settings-form').evaluate(form => form.requestSubmit());
-      await page.waitForFunction(() => document.querySelector('#other-alerts').open &&
-        document.activeElement?.name === 'claude5h_threshold');
-      assert.deepEqual(state.mutations, [], 'invalid hidden input must block every write');
-      assert.equal(await field(page, 'claude5h_threshold').inputValue(), '100');
+      await page.waitForFunction(() => document.activeElement?.name === 'claude5h_threshold');
+      assert.deepEqual(state.mutations, [], 'invalid input must block every write');
       await field(page, 'claude5h_threshold').fill('23');
       await save(page); await enabled(page, '#save-settings', false);
-      assert.equal(state.mutations.length, 1);
       assert.equal(state.settings.alert_rules.claude5h.threshold, 23);
+    });
+    await test('theme saves separately while preserving draft and cancel keeps theme', {}, async ({ page, state }) => {
+      await page.locator('input[name="icon_style"][value="number"]').check();
+      await page.locator('#startup-enabled').check();
+      await field(page, 'poll_minutes').fill('2.5');
+      await selectTheme(page, 'dark');
+      await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+      assert.deepEqual(state.mutations, [{ path: '/api/theme', method: 'PUT', body: { theme: 'dark' } }]);
+      assert.equal(await page.locator('input[name="icon_style"][value="number"]').isChecked(), true);
+      assert.equal(await page.locator('#startup-enabled').isChecked(), true);
+      assert.equal(await field(page, 'poll_minutes').inputValue(), '2.5');
+      await enabled(page, '#save-settings', true);
+      await page.locator('#reset-settings').click(); await enabled(page, '#save-settings', false);
+      assert.equal(await page.locator('input[name="icon_style"][value="donut"]').isChecked(), true);
+      assert.equal(await page.locator('#startup-enabled').isChecked(), false);
+      assert.equal(await field(page, 'poll_minutes').inputValue(), '3');
+      assert.equal(state.settings.theme, 'dark');
+      assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+      assert.equal(await page.locator('[data-theme-choice="dark"]').getAttribute('aria-checked'), 'true');
+      await page.locator('input[name="icon_style"][value="number"]').check(); await save(page);
+      assert.equal(state.settings.theme, 'dark', 'full settings save preserves separately saved theme');
+    });
+    await test('theme save failure retains previous theme and unrelated draft', { settings: { ...baseline(), theme: 'light' }, failTheme: 1 }, async ({ page, state }) => {
+      await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+      await field(page, 'poll_minutes').fill('2.5');
+      await selectTheme(page, 'dark');
+      assert.equal(state.settings.theme, 'light');
+      assert.equal(await page.locator('#action-message').evaluate(el => el.classList.contains('error')), true);
+      assert.match(await page.locator('#action-message').textContent(), /테마/);
+      assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
+      assert.equal(await page.locator('[data-theme-choice="light"]').getAttribute('aria-checked'), 'true');
+      assert.equal(await field(page, 'poll_minutes').inputValue(), '2.5');
+      await enabled(page, '#save-settings', true);
+      assert.deepEqual(state.mutations, [{ path: '/api/theme', method: 'PUT', body: { theme: 'dark' } }]);
     });
     for (const [name, options] of [['startup read failure', { failStartupRead: true }],
       ['unsupported startup', { startup: { supported: false, enabled: false } }]]) {
@@ -236,17 +279,16 @@ async function main() {
         assert.deepEqual(state.mutations.map(m => m.path), ['/api/settings']);
       });
     }
-    await test('notification disclosure and narrow viewport overflow', {}, async ({ page }) => {
+    await test('notification visibility, connected service ordering and narrow viewport overflow', {}, async ({ page }) => {
       await field(page, 'alerts_enabled').uncheck();
       assert.equal(await page.locator('#notification-options').isVisible(), false);
       await field(page, 'alerts_enabled').check();
       assert.equal(await page.locator('#notification-options').isVisible(), true);
-      assert.equal(await page.locator('#other-alerts').evaluate(el => el.tagName), 'DETAILS');
-      await page.waitForFunction(() => document.querySelector('#alert-rules [name="codex7d_threshold"]'));
-      assert.equal(await page.locator('#alert-rules [name$="_threshold"]').count(), 1);
-      assert.equal(await page.locator('#other-alerts [name$="_threshold"]').count(), 4);
-      await advanced(page);
-      await page.locator('#other-alerts').evaluate(el => { el.open = true; });
+      await page.waitForFunction(() => document.querySelector('#alert-rules .alert-service')?.dataset.agent === 'codex');
+      assert.equal(await page.locator('#alert-rules .alert-service[data-agent]').count(), 3);
+      assert.equal(await page.locator('#alert-rules .alert-rule[data-rule]').count(), 5);
+      assert.equal(await page.locator('#alert-rules [name$="_threshold"]').count(), 5);
+      for (const key of keys) assert.equal(await field(page, `${key}_threshold`).isVisible(), true);
       for (const width of [485, 320]) {
         await page.setViewportSize({ width, height: 900 });
         const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth,
@@ -262,7 +304,6 @@ async function main() {
         for (const [width, filename] of [[1000, 'settings-desktop.png'], [320, 'settings-mobile320.png']]) {
           await page.setViewportSize({ width, height: 900 });
           await page.evaluate(() => {
-            for (const id of ['other-alerts', 'advanced-settings', 'system-details']) document.getElementById(id).open = false;
             window.scrollTo(0, 0);
           });
           await page.screenshot({ path: path.join(screenshotDirectory, filename), fullPage: true });
