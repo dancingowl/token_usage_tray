@@ -49,7 +49,7 @@ func TestTrayStylesLegibleRegions(t *testing.T) {
 					t.Errorf("%s left=%d size=%d: center label presence = %v", style, left, size, centerInk)
 				}
 				if style != iconStyleDonut {
-					want := brand
+					want := color.NRGBA{8, 127, 104, 255}
 					if left >= 0 && left < 20 {
 						want = colDanger
 					}

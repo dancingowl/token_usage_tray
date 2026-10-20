@@ -470,7 +470,7 @@ func onReady() {
 	systray.AddSeparator()
 	mDetail := systray.AddMenuItem("상세 보기", "브라우저로 상세 화면을 연다")
 	mSettings := systray.AddMenuItem("설정", "표시·알림·자동 실행 설정을 연다")
-	mUpdate := systray.AddMenuItem("업데이트 확인", "새 버전과 배포 정보를 확인한다")
+	mUpdate := systray.AddMenuItem("릴리스 보기", "GitHub에서 새 버전과 변경 내용을 확인한다")
 	mRefresh := systray.AddMenuItem("지금 갱신", "")
 	mStyle := systray.AddMenuItem("아이콘 모양", "트레이 아이콘 표시 방법을 선택한다")
 	mDonut := mStyle.AddSubMenuItemCheckbox("도넛", "남은 사용량을 도넛으로 표시한다", settings.IconStyle == iconStyleDonut)
@@ -660,7 +660,7 @@ func onReady() {
 			case <-mSettings.ClickedCh:
 				openURL("http://" + listenAddr() + "/settings")
 			case <-mUpdate.ClickedCh:
-				openURL("http://" + listenAddr() + "/settings#system-details")
+				openURL(releasesPageURL)
 			case <-mDonut.ClickedCh:
 				chooseStyle(iconStyleDonut)
 			case <-mNumber.ClickedCh:

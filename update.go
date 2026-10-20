@@ -28,6 +28,7 @@ type updateStatus struct {
 }
 
 const latestReleaseEndpoint = "https://api.github.com/repos/dancingowl/token_usage_tray/releases/latest"
+const releasesPageURL = "https://github.com/dancingowl/token_usage_tray/releases/latest"
 
 type updateChecker struct {
 	mu       sync.Mutex
