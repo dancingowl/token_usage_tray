@@ -52,18 +52,22 @@ type clickMouseTracking struct {
 type clickButtonPalette struct{ fill, border, text uintptr }
 
 func clickButtonColors(state uint32, hovered bool) clickButtonPalette {
+	return clickButtonThemeColors(state, hovered, clickCardColors(false))
+}
+
+func clickButtonThemeColors(state uint32, hovered bool, colors clickThemePalette) clickButtonPalette {
 	if state&0x0004 != 0 { // ODS_DISABLED
-		return clickButtonPalette{clickTipBackground, clickTipBackground, 0x00afa39a}
+		return clickButtonPalette{colors.background, colors.background, colors.disabled}
 	}
 	if state&0x0001 != 0 { // ODS_SELECTED
-		return clickButtonPalette{0x00ece6e1, 0x00d6cec7, clickTipTextColor}
+		return clickButtonPalette{colors.buttonPressed, colors.buttonPressedBorder, colors.text}
 	}
 	if hovered {
-		return clickButtonPalette{0x00f5f1ed, 0x00e5ddd7, clickTipTextColor}
+		return clickButtonPalette{colors.buttonHover, colors.buttonHoverBorder, colors.text}
 	}
 	// Ghost actions blend into the card until hover or press. Native button
 	// labels and semantics remain available to accessibility tools.
-	return clickButtonPalette{clickTipBackground, clickTipBackground, clickTipDetailColor}
+	return clickButtonPalette{colors.background, colors.background, colors.detail}
 }
 
 func clickButtonBounds(client tooltipRect, dpi uintptr, index, count int) tooltipRect {
@@ -84,8 +88,9 @@ func (tip *trackingTooltip) drawActionButton(item *clickButtonDrawItem) bool {
 	if item.Type != 4 || index < 0 || index >= len(tip.buttons) || tip.buttons[index] != item.Window || item.DC == 0 {
 		return false
 	}
-	colors := clickButtonColors(item.State, tip.hovered == item.Window)
-	background, _, _ := pCreateSolidBrush.Call(clickTipBackground)
+	card := tip.cardColors()
+	colors := clickButtonThemeColors(item.State, tip.hovered == item.Window, card)
+	background, _, _ := pCreateSolidBrush.Call(card.background)
 	fill, _, _ := pCreateSolidBrush.Call(colors.fill)
 	dpi := tip.fontDPI
 	if dpi == 0 {

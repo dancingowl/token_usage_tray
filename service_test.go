@@ -146,6 +146,7 @@ func TestStatusNeverExposesProviderResponseSecrets(t *testing.T) {
 }
 
 func TestActionAPIQueuesAndRejectsUnknownActions(t *testing.T) {
+	preserveRuntimeStatus(t)
 	for len(appActions) > 0 {
 		<-appActions
 	}

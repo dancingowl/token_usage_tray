@@ -32,16 +32,20 @@ func clickMax32(values ...int32) int32 {
 
 // The severity comes solely from the numeric quota, never from display text.
 func clickRowValueColor(remaining int) uintptr {
+	return clickRowValueThemeColor(remaining, clickCardColors(false))
+}
+
+func clickRowValueThemeColor(remaining int, colors clickThemePalette) uintptr {
 	if remaining < 0 {
-		return clickTipTextColor
+		return colors.text
 	}
 	if remaining <= 10 {
-		return 0x002626b9
+		return colors.danger
 	} // #B92626
 	if remaining <= 20 {
-		return 0x00006e96
+		return colors.warning
 	} // #966E00
-	return clickTipTextColor
+	return colors.text
 }
 
 func clickRowMetrics(dpi uintptr) clickRowsLayout {
@@ -148,7 +152,8 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 		return false
 	}
 	defer pRestoreDC.Call(dc, saved)
-	brush, _, _ := pCreateSolidBrush.Call(clickTipBackground)
+	colors := tip.cardColors()
+	brush, _, _ := pCreateSolidBrush.Call(colors.background)
 	if brush == 0 {
 		return false
 	}
@@ -163,7 +168,7 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 			actions := clickButtonBounds(client, tip.fontDPI, 0, len(tip.buttons))
 			first.Right = actions.Left - layout.gap
 		}
-		clickDrawRowText(dc, tip.valueFont, row.Value, first, clickRowValueColor(row.Remaining), 0)
+		clickDrawRowText(dc, tip.valueFont, row.Value, first, clickRowValueThemeColor(row.Remaining, colors), 0)
 		detail := tooltipRect{client.Left + layout.padding, first.Bottom, client.Right - layout.padding, first.Bottom + layout.detailHeight}
 		left, right := clickRowSecondLine(row)
 		countdownWidth := clickMeasureText(dc, tip.rowCountdownFont(row), left).Right
@@ -174,17 +179,17 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 		countdown.Right = countdown.Left + countdownWidth
 		date := detail
 		date.Left += countdownWidth
-		countdownColor := uintptr(clickTipDetailColor)
+		countdownColor := colors.detail
 		if row.Countdown != "" {
-			countdownColor = clickTipTextColor
+			countdownColor = colors.text
 		}
 		clickDrawRowText(dc, tip.rowCountdownFont(row), left, countdown, countdownColor, 0)
-		clickDrawRowText(dc, tip.detailFont, right, date, clickTipDetailColor, 0)
+		clickDrawRowText(dc, tip.detailFont, right, date, colors.detail, 0)
 		detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
-		clickDrawRowText(dc, tip.font, row.Label, detail, clickTipDetailColor, 0)
+		clickDrawRowText(dc, tip.font, row.Label, detail, colors.detail, 0)
 		if row.Status != "" {
 			detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
-			clickDrawRowText(dc, tip.detailFont, row.Status, detail, clickTipDetailColor, 0)
+			clickDrawRowText(dc, tip.detailFont, row.Status, detail, colors.detail, 0)
 		}
 		y = detail.Bottom + layout.gap
 	}

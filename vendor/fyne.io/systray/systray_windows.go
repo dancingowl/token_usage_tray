@@ -237,6 +237,7 @@ type winTray struct {
 	// Click text is separate from the Shell hover tooltip, under muNID.
 	clickText clickTooltipBuffer
 	clickRows []ClickTooltipRow
+	clickDark bool
 
 	wmSystrayMessage,
 	wmTaskbarCreated uint32

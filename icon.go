@@ -172,7 +172,7 @@ func trayIconStyle(left int, brand color.NRGBA, style iconStyle) []byte {
 		if style == iconStyleNumber {
 			size = nativeTrayIconSize()
 		}
-		return pngToICO(trayStylePNG(left, brand, size, style), size)
+		return pngToICO(trayStylePNGForTheme(left, brand, size, style, systemTaskbarDark()), size)
 	}
 	// macOS 메뉴바: 레티나 기준 44px.
 	return trayStylePNG(left, brand, 44, style)
@@ -180,6 +180,10 @@ func trayIconStyle(left int, brand color.NRGBA, style iconStyle) []byte {
 
 // % 기호 없이 숫자를 그린다. Windows는 Tahoma 8pt를 우선 사용한다.
 func trayStylePNG(left int, brand color.NRGBA, size int, style iconStyle) []byte {
+	return trayStylePNGForTheme(left, brand, size, style, false)
+}
+
+func trayStylePNGForTheme(left int, brand color.NRGBA, size int, style iconStyle, dark bool) []byte {
 	if style != iconStyleNumber {
 		return ringPNG(left, brand, size)
 	}
@@ -187,10 +191,7 @@ func trayStylePNG(left int, brand color.NRGBA, size int, style iconStyle) []byte
 	if left >= 0 {
 		label = strconv.Itoa(min(left, 100))
 	}
-	ink := brand
-	if brand == colCodex {
-		ink = colCodexNumber
-	}
+	ink := trayNumberColor(brand, dark)
 	if left >= 0 && left < 20 {
 		ink = colDanger
 	}

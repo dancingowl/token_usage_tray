@@ -21,18 +21,20 @@ type alertRule struct {
 
 // All agent processes share preferences. Credentials never enter this file.
 type traySettings struct {
-	IconStyle     iconStyle            `json:"icon_style"`
-	DisplayWindow string               `json:"display_window"`
-	VisibleAgents agentVisibility      `json:"visible_agents"`
-	PollSeconds   int                  `json:"poll_seconds"`
-	AlertsEnabled bool                 `json:"alerts_enabled"`
-	NotifyLimits  bool                 `json:"notify_limits"`
-	AlertRules    map[string]alertRule `json:"alert_rules"`
+	IconStyle         iconStyle            `json:"icon_style"`
+	DisplayWindow     string               `json:"display_window"`
+	VisibleAgents     agentVisibility      `json:"visible_agents"`
+	PollSeconds       int                  `json:"poll_seconds"`
+	AlertsEnabled     bool                 `json:"alerts_enabled"`
+	NotifyLimits      bool                 `json:"notify_limits"`
+	AlertsPausedUntil int64                `json:"alerts_paused_until"`
+	Theme             string               `json:"theme"`
+	AlertRules        map[string]alertRule `json:"alert_rules"`
 }
 
 func defaultTraySettings() traySettings {
 	return traySettings{
-		IconStyle: iconStyleDonut, DisplayWindow: "week", PollSeconds: 60,
+		IconStyle: iconStyleDonut, DisplayWindow: "week", PollSeconds: 60, Theme: "system",
 		VisibleAgents: agentVisibility{true, true, true}, AlertsEnabled: true, NotifyLimits: true,
 		AlertRules: map[string]alertRule{
 			"claude5h": {true, 10, true}, "claude7d": {true, 20, true},
@@ -46,6 +48,12 @@ func validIconStyle(style iconStyle) bool {
 }
 
 func validateTraySettings(settings traySettings) error {
+	if settings.Theme != "" && settings.Theme != "system" && settings.Theme != "light" && settings.Theme != "dark" {
+		return fmt.Errorf("테마는 시스템, 밝게 또는 어둡게여야 합니다")
+	}
+	if settings.AlertsPausedUntil < 0 {
+		return fmt.Errorf("알림 중지 시각이 올바르지 않습니다")
+	}
 	if !validIconStyle(settings.IconStyle) {
 		return fmt.Errorf("지원하지 않는 아이콘 모양: %q", settings.IconStyle)
 	}

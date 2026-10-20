@@ -62,7 +62,7 @@ open dist/UsageTray.app
 기본값은 `lipo`가 있을 때 arm64·amd64 유니버설 빌드이며, 결과는 `dist/UsageTray.app`과 `dist/usage-tray`입니다.
 `UNIVERSAL=0 bash ./build.sh`는 현재 환경의 단일 아키텍처로 빌드합니다.
 번들에 `LSUIElement=true`를 넣고 `sips`·`iconutil`로 앱 아이콘을 만들며 ad-hoc 서명을 시도합니다.
-실행에는 계정 연결이 필요합니다. 배포 파일의 권한·격리 문제는 [문제 해결](troubleshooting.md)을 참고합니다.
+계정이 없어도 연결 대기 트레이와 로컬 서버는 실행됩니다. 실제 사용량 수집에는 계정 연결이 필요합니다. 배포 파일의 권한·격리 문제는 [문제 해결](troubleshooting.md)을 참고합니다.
 
 ## 실제 계정으로 확인하기
 
@@ -89,7 +89,7 @@ macOS에서는 `export USAGE_TRAY_DATA_DIR="${TMPDIR}token-usage-tray-dev"`로 �
 
 | 플래그 | 동작과 영향 |
 |---|---|
-| `-once` | 실제 수집·상태 저장 후 요약·툴팁 내용을 출력하고 종료합니다. 트레이·HTTP 서버는 띄우지 않습니다. 연결 가능한 에이전트가 없으면 안내 후 종료합니다. |
+| `-once` | 실제 수집·상태 저장 후 요약·툴팁 내용을 출력하고 종료합니다. 트레이·HTTP 서버는 띄우지 않습니다. 연결 가능한 에이전트가 없으면 빈 상태를 저장하고 종료합니다. |
 | `-tokens` | 감지된 Claude·Codex의 로컬 토큰 집계를 JSON으로 출력하고 종료합니다. 트레이·HTTP 서버는 띄우지 않습니다. |
 | `-only claude` / `-only codex` / `-only antigravity` | 해당 에이전트만 처리합니다. 일반 실행 또는 `-once`·`-tokens`와 함께 쓸 수 있습니다. Antigravity 연결은 macOS만 지원합니다. |
 | `-icons <폴더>` | 자격증명 없이 아이콘 견본 PNG·ICO를 저장하고 종료합니다. 트레이·HTTP 서버는 띄우지 않습니다. |
@@ -111,11 +111,15 @@ macOS에서는 `export USAGE_TRAY_DATA_DIR="${TMPDIR}token-usage-tray-dev"`로 �
 
 ```powershell
 node scripts/test-history-bins.cjs
+node scripts/test-dashboard-upgrades.cjs
 ```
+
+두 번째 검증은 재시작 감지와 미저장 설정 보호, 다른 탭이 시작한 갱신 작업의 추적,
+조회 조건 복원과 브라우저 저장소 차단 시 동작을 네트워크 없이 확인합니다.
 
 설정 UI는 `scripts/test-settings-ui.cjs`로 검증합니다. Node.js와 `playwright` 또는 `playwright-core`, Chromium 계열 브라우저가 필요합니다.
 앱의 `/settings` HTML과 읽기 전용 정적 자산을 받아야 하므로 **별도 터미널에서 앱 서버를 먼저 실행**합니다.
-기존 앱을 종료한 후 앞 절의 데이터 경로를 지정하고 빌드한 exe를 일반 실행합니다. 계정이 없으면 서버도 뜨지 않습니다.
+기존 앱을 종료한 후 앞 절의 데이터 경로를 지정하고 빌드한 exe를 일반 실행합니다. 계정이 없어도 연결 대기 화면과 로컬 서버가 실행됩니다.
 기본 주소는 `http://127.0.0.1:47113`이며 실제 실행 중인 에이전트 포트가 다르면 `BASE_URL`을 맞춥니다.
 
 의존성을 저장소 밖에 설치하는 Windows 예시입니다. npm 사용이 가능한 개발용 터미널에서 실행합니다.
@@ -136,9 +140,10 @@ node scripts/test-settings-ui.cjs
 macOS도 같은 변수 이름을 `export`로 지정하고 설치한 Playwright CLI로 `install chromium` 후 Node 스크립트를 실행합니다.
 선택 변수 `SCREENSHOT_DIR`은 데스크톱·320px 화면 스크린샷을 저장할 폴더입니다.
 
-UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정·자동 실행 저장도 브라우저 안의 fixture만 변경합니다.
+UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정·자동 실행·테마 저장도 브라우저 안의 fixture만 변경합니다.
+테마 fixture는 `/api/theme` GET/PUT과 `/api/meta`를 지원하며, 전체 설정 PUT은 별도로 저장한 테마를 보존합니다.
 실제 앱으로 전달하는 요청은 같은 origin의 페이지·정적 자산 GET뿐이며 다른 요청은 차단합니다.
-따라서 저장 순서·부분 실패 재시도·변경 취소·좁은 화면 등을 확인하지만 실제 레지스트리 등록이나 API 수집 성공을 검증하지 않습니다.
+따라서 저장 순서·부분 실패 재시도·변경 취소·서비스별 전체 알림 표시·테마의 독립 저장과 실패 시 유지·좁은 화면 등을 확인하지만 실제 레지스트리 등록이나 API 수집 성공을 검증하지 않습니다.
 서버로 실행한 앱 자체의 수집은 계속 동작합니다. mock 범위와 실제 앱 동작을 혼동하지 않습니다.
 검증 후 앱을 종료하고 테스트 터미널을 닫거나 `BASE_URL`, `PLAYWRIGHT_MODULE_PATH`, `CHROME_PATH`, `SCREENSHOT_DIR`를 해제합니다.
 
@@ -148,7 +153,9 @@ UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정
 |---|---|
 | `main.go`, `tray_preferences.go`, `click_summary.go` | 수집 주기·트레이·표시 선택·클릭 요약 |
 | `usage.go`, `paths.go`, `claude_desktop.go`, `antigravity.go` | 서비스 조회·자격증명 탐색·로컬 폴백 |
-| `settings.go`, `alerts.go`, `history.go`, `tokens.go` | 설정·알림·30일 관측 기록·토큰 집계 |
+| `settings.go`, `alerts.go`, `history.go`, `tokens.go`, `token_periods.go` | 설정·알림·30일 관측 기록·기간과 필터별 토큰 집계 |
+| `runtime_metadata.go`, `refresh_status.go`, `runtime_discovery.go` | 프로세스/UI 식별·갱신 작업 상태·연결 발견과 프로세스 인계 |
+| `theme.go`, `theme_*.go` | 브라우저·Windows 요약 카드 테마와 작업표시줄 밝기 구분 |
 | `service.go`, `dashboard.go`, `page.go` | 루프백 API·상세 화면·설정 화면 |
 | `platform_windows.go`, `platform_unix.go`, `startup_settings_*.go` | OS 기능·자동 실행 등록 |
 | `icon.go`, `icon_text_*.go`, `assets.go` | 잔량 아이콘·앱 아이콘 자산 |
@@ -156,6 +163,9 @@ UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정
 
 systray는 프로세스당 아이콘 하나를 제공합니다. Windows는 여러 에이전트가 있으면 자신을 `-only <agent>`로 다시 실행합니다.
 상태 파일도 에이전트별로 나누고 상세 화면은 여러 프로세스의 정보를 합칩니다.
+초기 단일 서비스·무계정 기본 실행은 `-only`와 접미사를 추가하지 않아 기존 URL과 데이터 위치를 보존합니다.
+기본 실행 중 여러 서비스를 발견하면 기존 listener를 닫고 자식을 실행한 뒤 부모 트레이를 종료합니다.
+명시한 `-only`는 그 대상만 자동 연결하며, 내부 자식 실행에는 다른 새 서비스를 발견하는 `-discover`를 사용합니다.
 `-only claude`는 47113, `-only codex`는 47114, `-only antigravity`는 47115를 사용합니다.
 Antigravity 연결은 macOS만 지원하며 기본 단일 에이전트 실행과 macOS 통합 실행은 47113을 사용합니다.
 macOS는 번들 본체가 종료되는 프로세스 분리 방식에서 메뉴바를 유지할 수 없어 한 프로세스가 가장 부족한 에이전트를 표시합니다.
@@ -167,13 +177,26 @@ Claude는 statusline의 2분 이내 캐시를 우선 사용하고 직접 조회�
 Claude의 429·503 응답은 5분부터 최대 30분까지 지수 백오프합니다. 실패하면 직전 정상값과 경과 시간을 유지합니다.
 Claude·Codex 조회 경로는 비공개 API이며 로컬 기록으로 폴백할 수 있습니다. 화면의 출처·수집 상태를 함께 확인합니다.
 
+`/api/actions`의 refresh 응답은 예약한 작업 ID를 반환하고 `/api/status`는 같은 작업의
+`running`·`completed`·`waiting`·`failed`와 시각을 제공합니다. 최소 간격·backoff 대기는 실제 조회 완료와 구분합니다.
+`/api/meta`의 프로세스별 `instance_id`와 `ui_revision`을 페이지에 삽입한 값과 비교해 재로딩합니다.
+미저장 설정·자동 실행 변경이나 저장 작업이 있으면 재로딩을 보류합니다. 조회 조건은 브라우저 `localStorage`에
+저장하며 OS 사용자 설정 파일과 별개이고 로컬 포트마다 저장 범위가 다릅니다.
+
+토큰 화면은 원시 증분 캐시에서 오늘을 포함한 7·14·30일을 다시 집계합니다. 모델·프로젝트는 정확히 일치하는
+조건으로 함께 필터링하고 모든 표·그래프·기간 합계에 같은 조건을 적용합니다. 중복 합산을 피하기 위해 서비스별로
+유효한 최신 캐시 하나만 선택합니다. `all=1`은 표의 상위 6개 제한만 해제합니다.
+예측 안정성은 전체 구간과 최근 구간의 실제 환산 속도를 비교하며 큰 속도 변화에서는 소진 시점만 보류합니다.
+알림 일시 중지는 설정의 Unix 종료 시각을 검사하고 만료 후 기존 규칙으로 재개합니다.
+Windows 요약 카드의 앱 테마와 트레이 숫자의 작업표시줄 테마를 구분하며 OS 변경도 수집 주기와 별도로 감지합니다.
+
 ## vendor 패치 유지
 
 현재 모듈은 `fyne.io/systray v1.11.0`, `golang.org/x/sys v0.48.0`, 간접 의존성 `github.com/godbus/dbus/v5 v5.1.0`입니다.
 `vendor/fyne.io/systray`에는 upstream 외에 다음 Windows 커스텀 기능과 테스트가 들어 있습니다.
 
 - `systray_windows.go`, `tooltip_windows.go`: 클릭·더블클릭 구분, 네이티브 요약 카드·수명·갱신 처리.
-- `tooltip_rows*.go`, `tooltip_style_windows.go`: 한도별 행·초기화 정보·색상·DPI별 배치.
+- `tooltip_rows*.go`, `tooltip_style_windows.go`, `tooltip_theme_windows.go`: 한도별 행·초기화 정보·밝기별 팔레트·DPI별 배치.
 - `popup_actions.go`, `tooltip_actions_windows.go`, `tooltip_button_windows.go`: 새로고침·설정 버튼과 액션 채널.
 - `tooltip_icon_windows.go`, `icons/`: Lucide PNG 마스크 임베딩·DPI 축소·버튼 상태별 색상.
 - `visibility_windows.go`, `tooltip_other.go`: 아이콘 숨김·복원, 다른 OS의 확장 API 호환 처리.
@@ -216,6 +239,7 @@ Windows는 `powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version v1.2.3
 현재 개발 브랜치의 일반 push만으로 실행되는 설정은 아닙니다. CI는 Go `stable`을 사용하므로 툴체인·OS 요건을 함께 확인합니다.
 Windows는 앱·vendor 테스트와 아이콘 생성 스모크, macOS는 앱 테스트·유니버설 번들·아이콘 스모크를 수행합니다.
 별도 Linux job은 vendor를 제외한 Go 파일 서식과 `go vet ./...`를 검사합니다.
+같은 job에서 Node 22로 그래프 구간·대시보드의 순수 JavaScript 회귀검사도 실행합니다.
 Windows exe·zip과 macOS zip artifact는 7일 보관합니다. `v*` 태그에서는 Windows·macOS·정적 검사가 모두 성공한 뒤 별도 `release` job이 배포 파일과 제삼자 고지를 함께 게시합니다. 태그 빌드는 태그명을 버전으로 사용합니다.
 
 릴리스할 때는 `docs/releases/vX.Y.Z.md`에 해당 버전의 배포 안내를 작성해 main에 반영하고, 검증한 커밋에 `vX.Y.Z` 태그를 만들어 push합니다. 워크플로가 안내 파일과 배포 파일을 확인한 뒤 GitHub Release를 생성합니다. 이미 게시한 태그를 다른 커밋으로 이동하지 않습니다. 의존성·아이콘 라이선스가 바뀌면 `THIRD_PARTY_NOTICES.txt`도 갱신합니다. Windows zip과 macOS 앱 번들에는 이 고지가 포함됩니다.

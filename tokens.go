@@ -30,6 +30,8 @@ type Row struct {
 	CacheCreate int64 `json:"cacheCreate"`
 	Output      int64 `json:"output"`
 	Requests    int64 `json:"requests"`
+	// IncludedCache is the cache portion already counted in Input (Codex).
+	IncludedCache int64 `json:"includedCache,omitempty"`
 }
 
 func (r *Row) add(o Row) {
@@ -38,12 +40,13 @@ func (r *Row) add(o Row) {
 	r.CacheCreate += o.CacheCreate
 	r.Output += o.Output
 	r.Requests += o.Requests
+	r.IncludedCache += o.IncludedCache
 }
 
-func (r Row) total() int64 { return r.Input + r.CacheRead + r.CacheCreate + r.Output }
+func (r Row) total() int64 { return r.Input + r.CacheRead + r.CacheCreate + r.Output - r.IncludedCache }
 
 func (r Row) hitPct() int {
-	in := r.Input + r.CacheRead + r.CacheCreate
+	in := r.Input + r.CacheRead + r.CacheCreate - r.IncludedCache
 	if in <= 0 {
 		return 0
 	}
@@ -75,20 +78,25 @@ type DayRow struct {
 }
 
 type AgentTokens struct {
+	// Legacy JSON field names are retained; ViewDays on TokenStats describes
+	// the selected calendar window for the chart, tables, and total alike.
 	Days14     []DayRow   `json:"days14"`
 	Models7d   []NamedRow `json:"models7d"`
 	Projects7d []NamedRow `json:"projects7d"`
 	Today      Row        `json:"today"`
-	// 7일 창의 전체 합. Models7d · Projects7d 는 상위 6개로 잘리므로 그 합으로는
-	// 화면의 "합계" 를 만들 수 없다(실제보다 작게 나온다). 그래서 따로 센다.
+	// 선택 기간의 전체 합. 화면에서 상위 6개를 표시해도 합계는 유지한다.
 	Total7d Row `json:"total7d"`
 }
 
 type TokenStats struct {
-	Updated time.Time   `json:"updated"`
-	ScanMs  int64       `json:"scanMs"`
-	Claude  AgentTokens `json:"claude"`
-	Codex   AgentTokens `json:"codex"`
+	Updated      time.Time   `json:"updated"`
+	ScanMs       int64       `json:"scanMs"`
+	Claude       AgentTokens `json:"claude"`
+	Codex        AgentTokens `json:"codex"`
+	ViewDays     int         `json:"viewDays,omitempty"`
+	AllRows      bool        `json:"allRows,omitempty"`
+	ModelNames   []string    `json:"modelNames,omitempty"`
+	ProjectNames []string    `json:"projectNames,omitempty"`
 }
 
 func cachePath() string { return filepath.Join(dataDir(), "tokens-cache"+suffix()+".json") }
@@ -341,38 +349,7 @@ func prune(m map[string]*Row) {
 }
 
 func views(agg map[string]*Row, daysBack int) AgentTokens {
-	var out AgentTokens
-	today := time.Now().Local().Format("2006-01-02")
-	since := time.Now().Local().AddDate(0, 0, -(daysBack - 1)).Format("2006-01-02")
-	days, models, projs := map[string]*Row{}, map[string]*Row{}, map[string]*Row{}
-	for k, row := range agg {
-		parts := strings.SplitN(k, "|", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		day, model, proj := parts[0], parts[1], parts[2]
-		addTo(days, day, *row)
-		if day >= since {
-			addTo(models, model, *row)
-			addTo(projs, proj, *row)
-			out.Total7d.add(*row)
-		}
-		if day == today {
-			out.Today.add(*row)
-		}
-	}
-	// 14일 — 빈 날도 채운다(차트가 날짜를 건너뛰지 않게).
-	for i := 13; i >= 0; i-- {
-		d := time.Now().Local().AddDate(0, 0, -i).Format("2006-01-02")
-		r := Row{}
-		if got := days[d]; got != nil {
-			r = *got
-		}
-		out.Days14 = append(out.Days14, DayRow{Day: d, Row: r})
-	}
-	out.Models7d = topRows(models, 6)
-	out.Projects7d = topRows(projs, 6)
-	return out
+	return tokenPeriodView(agg, tokenViewOptions{Days: daysBack}, time.Now(), false)
 }
 
 func addTo(m map[string]*Row, k string, r Row) {
@@ -390,8 +367,13 @@ func topRows(m map[string]*Row, n int) []NamedRow {
 		}
 		rows = append(rows, NamedRow{Name: k, Row: *v})
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].total() > rows[j].total() })
-	if len(rows) > n {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].total() == rows[j].total() {
+			return rows[i].Name < rows[j].Name
+		}
+		return rows[i].total() > rows[j].total()
+	})
+	if n > 0 && len(rows) > n {
 		rows = rows[:n]
 	}
 	return rows
@@ -411,10 +393,11 @@ func scanTokens(wantClaude, wantCodex bool) *TokenStats {
 	}
 	c.save()
 	out := &TokenStats{
-		Updated: time.Now(),
-		ScanMs:  time.Since(t0).Milliseconds(),
-		Claude:  views(c.Claude, 7),
-		Codex:   views(c.Codex, 7),
+		Updated:  time.Now(),
+		ScanMs:   time.Since(t0).Milliseconds(),
+		Claude:   tokenPeriodView(c.Claude, tokenViewOptions{Days: 14}, time.Now(), false),
+		Codex:    tokenPeriodView(c.Codex, tokenViewOptions{Days: 14}, time.Now(), true),
+		ViewDays: 14,
 	}
 	// 옆 프로세스가 읽어 상세 화면에서 합칠 수 있게 파일로도 남긴다.
 	if b, err := json.Marshal(out); err == nil {

@@ -24,6 +24,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 @media(prefers-reduced-motion:reduce){button,.button{transition:none}}
 .dash-note{font-size:12px;color:var(--sub);margin:8px 0;overflow-wrap:anywhere}.dash-message{color:#0f766e;font-size:13px;margin:8px 0 0;overflow-wrap:anywhere}.dash-message:empty{display:none}.dash-message.error{color:var(--bad)}
 .quick-toolbar{margin:0}.header-message{margin:0 0 12px;text-align:right}
+.app-update-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin-bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;font-size:13px}.app-update-banner p{margin:0}
 .disclosure{margin-bottom:12px;scroll-margin-top:24px}.disclosure>summary{display:flex;align-items:center;gap:12px;list-style:none;min-height:26px}.disclosure>summary::-webkit-details-marker{display:none}.disclosure>summary:after{content:'+';font-size:21px;font-weight:400;color:var(--sub);margin-left:auto}.disclosure[open]>summary:after{content:'−'}.summary-note{font-size:12px;font-weight:400;color:var(--sub)}
 .history-heading{display:flex;align-items:center;gap:12px;position:relative;margin-bottom:20px}.history-heading h2{margin:0;font-size:17px;color:var(--tx)}.history-heading .summary-note{margin-left:10px}
 .history-help{margin-left:auto}.history-help>summary{display:flex;align-items:center;justify-content:center;list-style:none;width:25px;height:25px;border:1px solid #cbd3dd;border-radius:50%;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer}.history-help>summary::-webkit-details-marker{display:none}.history-help[open]>summary{margin:0;background:#e1eeea;color:#0c695d}.history-help-content{position:absolute;right:0;top:34px;z-index:3;width:340px;max-width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;color:var(--sub);font-size:12px}.history-help-content p{margin:0 0 8px}.history-help-content p:last-child{margin:0}
@@ -32,9 +33,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .history-view-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px}.history-view-controls span{font-size:12px;color:var(--sub)}#history-zoom[aria-pressed="true"]{color:#0c695d;background:#e1eeea;border-color:#a9d4c9}.history-overview{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}.history-overview svg{display:block;width:100%;height:76px}.history-overview-labels{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--sub)}
 .settings-fields{border:0;padding:0;margin:0;min-width:0}.settings-section{padding:22px 0;border-bottom:1px solid var(--line)}.settings-section:first-child{padding-top:0}.settings-section>h2{font-size:16px;color:var(--tx);margin:0 0 12px}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,auto);align-items:center;gap:10px 24px;padding:12px 0}.settings-label{font-size:13px;color:var(--tx);min-width:0}.settings-control{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}.settings-control select{width:230px;max-width:100%}.settings-row .dash-note{grid-column:1/-1;margin:0}.settings-switch{appearance:none;position:relative;flex:none;width:36px;height:22px;border:1px solid #b6c1cd;border-radius:12px;background:#dbe1e8;cursor:pointer;margin:0;vertical-align:middle}.settings-switch:before{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #20293825}.settings-switch:checked{background:#0f766e;border-color:#0f766e}.settings-switch:checked:before{left:16px}.settings-switch:disabled{opacity:.45;cursor:default}.settings-fields:disabled .settings-label{color:var(--sub)}
 .service-options{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}.service-option{display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;cursor:pointer}.service-option input{margin:0;accent-color:#0f766e}.icon-options{display:flex;gap:6px}.icon-option{position:relative;cursor:pointer}.icon-option input{position:absolute;opacity:0;width:1px;height:1px}.icon-option-face{display:flex;align-items:center;gap:8px;min-height:38px;padding:0 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff}.icon-option input:checked+.icon-option-face{border-color:#75b4a9;color:#0c695d;background:#edf6f3}.icon-option input:focus-visible+.icon-option-face{outline:2px solid #0f766e;outline-offset:3px}.icon-option input:disabled+.icon-option-face{opacity:.5}.icon-preview{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;box-sizing:border-box}.preview-donut{border:3px solid #0f766e;border-right-color:#dce5e1;border-radius:50%;transform:rotate(-35deg)}.preview-number{font-size:17px;letter-spacing:-.06em;font-weight:750;color:#0f766e}
-.alert-rule{border-top:1px solid var(--line);padding:12px 0}.alert-rule-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.alert-rule-header label{font-size:13px}.alert-rule-controls{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;font-size:12px;color:var(--sub)}.alert-threshold{display:inline-flex;align-items:center;gap:6px}.alert-threshold input{width:66px;text-align:center}.alert-recovery{display:inline-flex;align-items:center;gap:6px;cursor:pointer}.alert-recovery input{margin:0;accent-color:#0f766e}.alert-rule.rule-off .alert-rule-controls{opacity:.65}.settings-disclosure{padding:16px 0;border-bottom:1px solid var(--line)}.settings-disclosure>summary{font-size:13px;list-style:none;display:flex;align-items:center;gap:8px}.settings-disclosure>summary::-webkit-details-marker{display:none}.settings-disclosure>summary:after{content:'+';margin-left:auto;color:var(--sub);font-size:18px;font-weight:400}.settings-disclosure[open]>summary:after{content:'−'}.settings-disclosure[open]>summary{margin-bottom:12px}.settings-disclosure .settings-row{padding-bottom:0}.settings-row input[name=poll_minutes]{width:92px}.settings-help{font-size:12px;color:var(--sub);margin-top:12px}.settings-help>summary{font-size:12px;font-weight:400}.settings-help p{line-height:1.6;margin:6px 0}.settings-compact{padding:5px 8px;min-height:30px;font-size:12px;background:transparent}
-.settings-footer{display:flex;align-items:center;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;background:#fff;border-top:1px solid var(--line);padding:14px 0 0;margin-top:20px}.settings-footer .dash-message{margin:0;font-size:12px;flex:1;min-width:140px}.settings-footer .dash-actions{margin-left:auto}.settings-info>summary{font-size:15px;list-style:none;display:flex;align-items:center;gap:10px}.settings-info>summary::-webkit-details-marker{display:none}.settings-info>summary:after{content:'+';margin-left:auto;color:var(--sub);font-size:20px;font-weight:400}.settings-info[open]>summary:after{content:'−'}.settings-info .dash-grid{margin-top:16px}
-@media(max-width:620px){.settings-row{grid-template-columns:1fr;gap:10px}.settings-row>.settings-switch{justify-self:start}.settings-control,.service-options{justify-content:flex-start}.settings-control select{width:100%}.settings-row .dash-note{grid-column:auto}.settings-footer{padding-bottom:8px}.settings-footer .dash-message{flex-basis:100%}}
+.alert-service{margin-top:16px}.alert-service h3{display:flex;align-items:center;gap:10px;margin:0;padding:8px 0;font-size:13px;color:var(--tx)}.alert-service-state{font-weight:400;font-size:11px;color:var(--sub)}.alert-rule{display:grid;grid-template-columns:76px minmax(0,1fr) 36px;align-items:center;gap:10px 20px;border-top:1px solid var(--line);padding:12px 0}.alert-rule-label{font-size:13px}.alert-rule-controls{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;font-size:12px;color:var(--sub)}.alert-threshold{display:inline-flex;align-items:center;gap:6px}.alert-threshold input{width:66px;text-align:center}.alert-recovery{display:inline-flex;align-items:center;gap:6px;cursor:pointer}.alert-recovery input{margin:0;accent-color:#0f766e}.alert-rule.rule-off .alert-rule-controls{opacity:.65}.settings-row input[name=poll_minutes]{width:92px}.settings-compact{padding:5px 8px;min-height:30px;font-size:12px;background:transparent}
+.settings-footer{display:flex;align-items:center;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;background:#fff;border-top:1px solid var(--line);padding:14px 0 0;margin-top:20px}.settings-footer .dash-message{margin:0;font-size:12px;flex:1;min-width:140px}.settings-footer .dash-actions{margin-left:auto}.settings-info .dash-grid{margin-top:16px}
+@media(max-width:620px){.alert-rule{grid-template-columns:minmax(0,1fr) 36px;gap:10px}.alert-rule-controls{grid-column:1/-1;grid-row:2}.alert-rule>.settings-switch{grid-column:2;grid-row:1}.settings-row{grid-template-columns:1fr;gap:10px}.settings-row>.settings-switch{justify-self:start}.settings-control,.service-options{justify-content:flex-start}.settings-control select{width:100%}.settings-row .dash-note{grid-column:auto}.settings-footer{padding-bottom:8px}.settings-footer .dash-message{flex-basis:100%}}
 details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
 .dash-history-chart{width:100%;height:250px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-point{fill:transparent;stroke:none}.dash-chart-point:focus{outline:none}
 .history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
@@ -46,10 +47,11 @@ body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot
 @media(max-width:620px){.pace-groups{grid-template-columns:1fr;gap:18px}.pace-plan{border-left:0;border-top:1px solid var(--line);padding:18px 0 0}}
 `
 
-const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button><button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>`
+const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type="button" data-action="refresh"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 11-2l3 3M18 16a7 7 0 0 1-11 2l-3-3"/></svg>새로고침</button>` + themeControlHTML + `<button type="button" data-action="detail" id="detail-action"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M10 5H5v14h14v-5"/></svg>상세 보기</button><a class="button subtle" href="/settings"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg>설정</a></div>`
 
 const dashboardHTML = `
 <div class="dashboard">
+ <div id="app-update-banner" class="app-update-banner" hidden role="status"><p id="app-update-message"></p><button type="button" id="reload-app">화면 갱신</button></div>
  <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>기록 구간 확대를 켜면 위에는 선택 기간 전체와 확대 위치를, 아래에는 기록이 있는 구간을 크게 보여줍니다. 버튼을 다시 누르면 전체 기간 보기로 돌아갑니다.</p><p>각 시간 구간의 마지막 관측 잔량을 표시하며 확대 범위에 맞춰 간격을 조절합니다. 원본 기록은 보존하고 초기화 전후와 빈 구간은 잇지 않습니다. 호버·터치·탭 키로 상세를 확인하고 Esc로 닫습니다.</p><p>소진 예상은 원본 기록의 최근 소비 속도에 따른 추정입니다.</p></div></details></div>
   <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">한도<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
   <div class="history-view-controls"><span id="history-view-label">전체 기간</span><button type="button" id="history-zoom" aria-pressed="true" aria-controls="history-chart history-overview" disabled>기록 구간 확대</button></div>
@@ -68,20 +70,22 @@ const dashboardHTML = `
    </section>
    <section class="settings-section" aria-labelledby="alert-settings-title"><h2 id="alert-settings-title">알림</h2>
     <div class="settings-row"><label class="settings-label" for="alerts-enabled">잔여량 알림</label><div class="settings-control"><input id="alerts-enabled" name="alerts_enabled" class="settings-switch" type="checkbox" role="switch" aria-controls="notification-options"></div></div>
-    <div id="notification-options"><div id="alert-rules"></div><p id="alert-rules-empty" class="dash-note" hidden>현재 연결된 알림 대상이 없습니다.</p><details id="other-alerts" class="settings-disclosure"><summary>다른 알림 대상</summary><div id="other-alert-rules"></div></details>
+    <div class="settings-row"><label class="settings-label" for="alert-pause">알림 일시 중지</label><div class="settings-control"><select id="alert-pause" name="alert_pause"><option value="none">중지 안 함</option><option value="hour">1시간 동안</option><option value="today">오늘까지</option><option value="until" hidden>현재 중지 유지</option></select></div><p id="alert-pause-state" class="dash-note" hidden></p></div>
+    <div id="notification-options"><div id="alert-rules"></div>
      <div class="settings-row"><label class="settings-label" for="notify-limits">한도 도달 시 알림</label><div class="settings-control"><input id="notify-limits" name="notify_limits" class="settings-switch" type="checkbox" role="switch"></div></div>
     </div>
    </section>
    <section class="settings-section" aria-labelledby="general-settings-title"><h2 id="general-settings-title">일반</h2>
+
     <div class="settings-row"><label class="settings-label" for="startup-enabled">로그인 시 실행</label><div class="settings-control"><button type="button" id="retry-startup" class="settings-compact" hidden>다시 확인</button><input id="startup-enabled" class="settings-switch" type="checkbox" role="switch" aria-describedby="startup-state" disabled></div><p id="startup-state" class="dash-note" role="status">자동 실행 상태를 확인하고 있습니다.</p></div>
+    <div class="settings-row"><label class="settings-label" for="poll-minutes">수집 간격</label><div class="settings-control"><input id="poll-minutes" name="poll_minutes" type="number" min="1" max="60" step="any" inputmode="decimal" required aria-describedby="poll-help">분</div><p class="dash-note" id="poll-help">1~60분 · 최소 조회 간격: Claude 3분, Codex·Antigravity 2분</p></div>
    </section>
-   <details id="advanced-settings" class="settings-disclosure"><summary>고급 설정<span class="summary-note">수집 간격</span></summary><div class="settings-row"><label class="settings-label" for="poll-minutes">수집 간격</label><div class="settings-control"><input id="poll-minutes" name="poll_minutes" type="number" min="1" max="60" step="any" inputmode="decimal" required aria-describedby="poll-help">분</div></div><details class="settings-help" id="poll-help"><summary>수집 간격 안내</summary><p>1~60분 사이에서 설정하며 다음 수집부터 적용합니다. 서비스별 최소 조회 간격(Claude 3분, Codex 2분)은 유지됩니다.</p></details></details>
   </fieldset><div class="settings-footer"><p id="settings-message" class="dash-message" role="status" aria-live="polite">설정을 불러오고 있습니다.</p><div class="dash-actions"><button type="button" id="reset-settings" disabled>변경 취소</button><button type="submit" class="primary" id="save-settings" disabled>저장</button></div></div></form>
  </div></section>
- <details id="system-details" class="panel page-section dashboard-full settings-info"><summary id="system-title">앱 정보<span class="summary-note">연결 · 업데이트</span></summary><div class="dash-grid">
+ <section id="system-details" class="panel page-section dashboard-full settings-info" aria-labelledby="system-title"><h2 id="system-title">앱 정보</h2><div class="dash-grid">
   <section aria-labelledby="status-title"><h2 id="status-title">연결 상태</h2><div id="agent-status"><p class="none">상태를 확인하고 있습니다.</p></div><p id="activity-state" class="dash-note"></p><p id="status-message" class="dash-message" role="status"></p></section>
-  <section aria-labelledby="update-title"><h2 id="update-title">버전</h2><p id="update-state" class="dash-note">현재 버전 {{APP_VERSION}}</p><div class="dash-actions"><a class="button" id="release-link" href="{{RELEASES_URL}}" target="_blank" rel="noopener noreferrer">릴리스 보기<span aria-hidden="true">↗</span></a></div><p class="dash-note">새 버전과 변경 내용은 GitHub에서 확인합니다.</p></section>
- </div></details>
+  <section aria-labelledby="update-title"><h2 id="update-title">버전</h2><p id="update-state" class="dash-note">현재 버전 {{APP_VERSION}}</p><div class="dash-actions"><a class="button" id="release-link" href="{{RELEASES_URL}}" target="_blank" rel="noopener noreferrer">릴리스 보기<span aria-hidden="true">↗</span></a></div></section>
+ </div></section>
 </div>
 `
 
@@ -106,12 +110,111 @@ function migrateLegacyLink() {
 }
 migrateLegacyLink();window.addEventListener('hashchange',migrateLegacyLink);
 let settingsDirty=false, startupDirty=false;
+let draftPausedUntil=0,metadataBusy=false,reloadPending=false,refreshWatcher=0;
+let themePreference=window.getUsageTrayTheme?window.getUsageTrayTheme():'system',themeBusy=false,themeRequest=0;
+const initialInstance=document.querySelector('meta[name="usage-tray-instance"]')?.content || '';
+const initialUI=document.querySelector('meta[name="usage-tray-ui"]')?.content || '';
+let knownInstance=initialInstance,knownUI=initialUI;
+function storageRead(key,fallback=null){try{return JSON.parse(localStorage.getItem(key)) ?? fallback;}catch(e){return fallback;}}
+function storageWrite(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch(e){/* Preferences remain usable when browser storage is unavailable. */}}
+function saveHistoryView(){storageWrite('usage-tray-history-view',{agent:$('history-agent').value,window:$('history-window').value,days:Number($('history-days').value),zoom:historyZoom});}
+function restoreHistoryView(){
+ const saved=storageRead('usage-tray-history-view');if(!saved || typeof saved!=='object')return;
+ if(Object.prototype.hasOwnProperty.call(names,saved.agent) && ['short','week'].includes(saved.window)){$('history-agent').value=saved.agent;$('history-window').value=saved.window;historySelectionTouched=true;historySelectionInitialized=true;}
+ if([1,7,30].includes(saved.days))$('history-days').value=String(saved.days);if(typeof saved.zoom==='boolean')historyZoom=saved.zoom;
+}
+restoreHistoryView();
+function showReloadNotice(text){$('app-update-message').textContent=text;$('app-update-banner').hidden=false;$('reload-app').disabled=settingsDirty || startupDirty || settingsBusy || mutationCount>0;}
+async function checkAppMetadata(){
+ if(metadataBusy || document.hidden)return;metadataBusy=true;const themeAtStart=themeRequest;
+ try{
+  const data=await api('/api/meta');
+  if(!data || typeof data.instance_id!=='string' || typeof data.ui_revision!=='string')return;
+  if(!knownInstance){knownInstance=data.instance_id;knownUI=data.ui_revision;}
+  if(data.instance_id!==knownInstance || data.ui_revision!==knownUI){reloadPending=true;if(settingsDirty || startupDirty || settingsBusy || mutationCount)showReloadNotice('앱이 업데이트되었습니다. 편집 중인 설정을 저장하거나 취소한 뒤 화면을 갱신해 주세요.');else location.reload();}
+  if(!themeBusy && themeAtStart===themeRequest)adoptTheme(data.theme || 'system');
+ }catch(e){/* A restart temporarily closes the local server; retry on the next poll. */}
+ finally{metadataBusy=false;}
+}
+$('reload-app').addEventListener('click',()=>{if(!settingsDirty && !startupDirty && !settingsBusy && !mutationCount)location.reload();});
 window.addEventListener('beforeunload',event=>{
  if(settingsDirty || startupDirty) { event.preventDefault();event.returnValue=''; }
 });
 function message(id, text, error) { const e=$(id); e.textContent=text; e.classList.toggle('error',!!error); }
 function textNode(tag, text, className) { const e=document.createElement(tag); e.textContent=text; if(className)e.className=className; return e; }
+const tokenTooltip=textNode('div','','token-tooltip');tokenTooltip.id='token-tooltip';tokenTooltip.setAttribute('role','tooltip');tokenTooltip.hidden=true;document.body.append(tokenTooltip);
+let inspectedTokenBar=null,pinnedTokenBar=null;
+function dismissTokenDetails(){if(inspectedTokenBar){inspectedTokenBar.classList.remove('is-inspected');inspectedTokenBar.removeAttribute('aria-describedby');}inspectedTokenBar=null;pinnedTokenBar=null;tokenTooltip.hidden=true;}
+function showTokenDetails(bar){
+ if(inspectedTokenBar!==bar)dismissTokenDetails();inspectedTokenBar=bar;
+ const data=bar.dataset,exact=value=>BigInt(value || '0').toLocaleString('ko-KR');
+ tokenTooltip.replaceChildren(textNode('p',data.day+' · '+data.agent,'token-tooltip-title'));
+ const total=textNode('strong',exact(data.total),'token-tooltip-total');total.append(textNode('span','토큰'));tokenTooltip.append(total);
+ const details=document.createElement('dl'),add=(label,value)=>details.append(textNode('dt',label),textNode('dd',exact(value)));
+ if(data.agent==='Codex'){add('입력 (캐시 포함)',data.input);add('출력',data.output);add('입력 중 캐시 읽기',data.cacheRead);}
+ else {add('일반 입력',data.input);add('캐시 읽기',data.cacheRead);add('캐시 쓰기',data.cacheCreate);add('출력',data.output);}
+ add('요청',data.requests);tokenTooltip.append(details);tokenTooltip.hidden=false;
+ bar.classList.add('is-inspected');bar.setAttribute('aria-describedby',tokenTooltip.id);
+ positionTokenDetails(bar);
+}
+function positionTokenDetails(bar){
+ const rect=bar.getBoundingClientRect(),width=tokenTooltip.offsetWidth,height=tokenTooltip.offsetHeight;
+ tokenTooltip.style.left=Math.max(12,Math.min(window.innerWidth-width-12,rect.left+rect.width/2-width/2))+'px';
+ const above=rect.top-height-10;tokenTooltip.style.top=Math.max(12,above>=12?above:Math.min(window.innerHeight-height-12,rect.bottom+10))+'px';
+}
+function tokenBar(target){return target instanceof Element?target.closest('#token-snapshot .ch-col'):null;}
+document.addEventListener('pointerover',event=>{const bar=tokenBar(event.target);if(bar && event.pointerType!=='touch' && !bar.contains(event.relatedTarget))showTokenDetails(bar);});
+document.addEventListener('pointerout',event=>{const bar=tokenBar(event.target);if(bar && !bar.contains(event.relatedTarget) && inspectedTokenBar===bar && pinnedTokenBar!==bar && !bar.contains(document.activeElement))dismissTokenDetails();});
+document.addEventListener('focusin',event=>{const bar=tokenBar(event.target);if(bar)showTokenDetails(bar);});
+document.addEventListener('focusout',event=>{const bar=tokenBar(event.target);if(bar && !bar.contains(event.relatedTarget) && pinnedTokenBar!==bar)dismissTokenDetails();});
+document.addEventListener('pointerdown',event=>{
+ const bar=tokenBar(event.target);if(!bar){dismissTokenDetails();return;}
+ if(event.pointerType==='touch'){event.preventDefault();if(pinnedTokenBar===bar){dismissTokenDetails();return;}showTokenDetails(bar);pinnedTokenBar=bar;}
+});
+document.addEventListener('pointercancel',dismissTokenDetails);
+document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissTokenDetails();});
+document.addEventListener('scroll',()=>{
+ const bar=inspectedTokenBar;
+ if(bar && !pinnedTokenBar && bar.contains(document.activeElement)){
+  const rect=bar.getBoundingClientRect();
+  if(rect.bottom>0 && rect.top<window.innerHeight)positionTokenDetails(bar);else dismissTokenDetails();
+ }else dismissTokenDetails();
+},true);window.addEventListener('resize',dismissTokenDetails);
 function timeLabel(value) { const d=new Date(value); return value && !isNaN(d) ? d.toLocaleString('ko-KR') : '아직 성공한 기록 없음'; }
+const themeLabels={system:'시스템 설정',light:'밝게',dark:'어둡게'};
+const themeChoices=Array.from(document.querySelectorAll('[data-theme-choice]'));
+function renderThemeControl(){
+ const selected=themeChoices.find(button=>button.dataset.themeChoice===themePreference),trigger=$('theme-toggle');
+ trigger.replaceChildren(selected.querySelector('svg').cloneNode(true));trigger.setAttribute('aria-label','테마: '+themeLabels[themePreference]);trigger.title='테마: '+themeLabels[themePreference];trigger.disabled=themeBusy || settingsBusy;
+ for(const choice of themeChoices){choice.setAttribute('aria-checked',String(choice.dataset.themeChoice===themePreference));choice.disabled=themeBusy || settingsBusy;}
+}
+function adoptTheme(value){themePreference=Object.prototype.hasOwnProperty.call(themeLabels,value)?value:'system';if(window.applyUsageTrayTheme)window.applyUsageTrayTheme(themePreference);renderThemeControl();}
+function closeThemeMenu(restoreFocus=false){$('theme-menu').hidden=true;$('theme-toggle').setAttribute('aria-expanded','false');if(restoreFocus)$('theme-toggle').focus();}
+function openThemeMenu(last=false){if(themeBusy || settingsBusy)return;$('theme-menu').hidden=false;$('theme-toggle').setAttribute('aria-expanded','true');(last?themeChoices[themeChoices.length-1]:themeChoices.find(button=>button.dataset.themeChoice===themePreference)).focus();}
+async function saveTheme(value){
+ if(themeBusy || settingsBusy)return;closeThemeMenu(true);if(value===themePreference)return;
+ themeBusy=true;const request=++themeRequest;mutationCount++;renderThemeControl();
+ try{
+  const result=await api('/api/theme','PUT',{theme:value});
+  if(request===themeRequest)adoptTheme(result.theme);
+  else{const beforeRead=themeRequest,latest=await api('/api/theme');if(beforeRead===themeRequest)adoptTheme(latest.theme);}
+  message('action-message','');
+ }
+ catch(e){message('action-message','테마를 저장하지 못했습니다. 다시 선택해 주세요.',true);}
+ finally{themeBusy=false;mutationCount--;renderThemeControl();if(document.activeElement===document.body || document.activeElement===$('theme-toggle'))$('theme-toggle').focus();}
+}
+$('theme-toggle').addEventListener('click',()=>{if($('theme-menu').hidden)openThemeMenu();else closeThemeMenu();});
+$('theme-toggle').addEventListener('keydown',event=>{if(event.key==='ArrowDown' || event.key==='ArrowUp'){event.preventDefault();openThemeMenu(event.key==='ArrowUp');}});
+for(const choice of themeChoices)choice.addEventListener('click',()=>saveTheme(choice.dataset.themeChoice));
+$('theme-menu').addEventListener('keydown',event=>{
+ const index=themeChoices.indexOf(document.activeElement);
+ if(event.key==='Escape'){event.preventDefault();closeThemeMenu(true);}
+ else if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?themeChoices.length-1:(index+(event.key==='ArrowDown'?1:-1)+themeChoices.length)%themeChoices.length;themeChoices[next].focus();}
+ else if(event.key==='Tab')setTimeout(()=>closeThemeMenu(),0);
+});
+document.addEventListener('pointerdown',event=>{if(!$('theme-control').contains(event.target))closeThemeMenu();});
+window.addEventListener('usage-tray-theme-change',()=>{themeRequest++;themePreference=window.getUsageTrayTheme();renderThemeControl();});
+renderThemeControl();
 async function api(path, method, body) {
  const options={cache:'no-store',headers:{'Accept':'application/json'}};
  if(method) { options.method=method; options.headers['X-Usage-Tray']='1'; options.headers['Content-Type']='application/json'; if(body!==undefined)options.body=JSON.stringify(body); }
@@ -122,40 +225,43 @@ async function api(path, method, body) {
 function field(name) { return form.elements.namedItem(name); }
 function setChecked(name,value) { field(name).checked=!!value; }
 function drawRules(settings) {
- $('alert-rules').replaceChildren();$('other-alert-rules').replaceChildren();
+ $('alert-rules').replaceChildren();
+ for(const [agent,name] of Object.entries(names)){
+  const group=textNode('section','','alert-service');group.dataset.agent=agent;const heading=textNode('h3',name);heading.id='alert-service-'+agent;heading.append(textNode('span','','alert-service-state'));group.setAttribute('aria-labelledby',heading.id);group.append(heading);$('alert-rules').append(group);
+ }
  for(const [key,label] of Object.entries(ruleNames)) {
   const rule=settings.alert_rules[key] || {enabled:false,threshold:20,recovery:false};
   const row=textNode('div','','alert-rule');row.dataset.rule=key;
-  const header=textNode('div','','alert-rule-header'),toggle=document.createElement('input');toggle.type='checkbox';toggle.name=key+'_enabled';toggle.id='rule-'+key;toggle.checked=!!rule.enabled;toggle.className='settings-switch';toggle.setAttribute('role','switch');
-  const title=textNode('label',label);title.htmlFor=toggle.id;header.append(title,toggle);row.append(header);
+  const toggle=document.createElement('input');toggle.type='checkbox';toggle.name=key+'_enabled';toggle.id='rule-'+key;toggle.checked=!!rule.enabled;toggle.className='settings-switch';toggle.setAttribute('role','switch');toggle.setAttribute('aria-label',label+' 알림');
+  const title=textNode('label',label.includes('·')?label.split('·')[1].trim():'모델 한도','alert-rule-label');title.htmlFor=toggle.id;row.append(title);
   const controls=textNode('div','','alert-rule-controls'),threshold=textNode('label','잔량','alert-threshold'),input=document.createElement('input');
   input.name=key+'_threshold';input.type='number';input.min='1';input.max='99';input.step='1';input.required=true;input.value=rule.threshold;input.setAttribute('aria-label',label+' 남은량 기준 퍼센트');threshold.append(input,document.createTextNode('% 미만'));
-  const recovery=textNode('label','','alert-recovery'),check=document.createElement('input');check.name=key+'_recovery';check.type='checkbox';check.checked=!!rule.recovery;check.setAttribute('aria-label',label+' 회복 알림');recovery.append(check,document.createTextNode('한도 회복 시 알림'));controls.append(threshold,recovery);row.append(controls);$('alert-rules').append(row);
+  const recovery=textNode('label','','alert-recovery'),check=document.createElement('input');check.name=key+'_recovery';check.type='checkbox';check.checked=!!rule.recovery;check.setAttribute('aria-label',label+' 회복 알림');recovery.append(check,document.createTextNode('회복 시 알림'));controls.append(threshold,recovery);row.append(controls,toggle);const agent=key.startsWith('claude')?'claude':key.startsWith('codex')?'codex':'antigravity';$('alert-rules').querySelector('[data-agent="'+agent+'"]').append(row);
  }
  arrangeAlertRules();
 }
 function arrangeAlertRules() {
- for(const key of Object.keys(ruleNames)){
-  const row=form.querySelector('[data-rule="'+key+'"]');if(!row)continue;
-  const agent=key.startsWith('claude')?'claude':key.startsWith('codex')?'codex':'antigravity',u=settingsAgentState && settingsAgentState[agent],w=u && u[key.endsWith('5h')?'short':'week'];
-  const applicable=!settingsAgentState || !!(u && u.available && (key==='antigravity' || w && (w.left>=0 || w.resetAt>0)));
-  $(applicable?'alert-rules':'other-alert-rules').append(row);
+ const groups=Array.from($('alert-rules').querySelectorAll('.alert-service'));
+ for(const group of groups){const usage=settingsAgentState && settingsAgentState[group.dataset.agent],status=group.querySelector('.alert-service-state');status.textContent=usage && !usage.available?'연결 안 됨':'';}
+ if(settingsAgentState){
+  groups.sort((a,b)=>Number(!!settingsAgentState[b.dataset.agent]?.available)-Number(!!settingsAgentState[a.dataset.agent]?.available));
+  for(const group of groups)$('alert-rules').append(group);
  }
- $('alert-rules-empty').hidden=$('alert-rules').children.length>0;$('other-alerts').hidden=$('other-alert-rules').children.length===0;
 }
 async function loadSettingsContext(){try{settingsAgentState=await api('/state.json');arrangeAlertRules();}catch(e){/* Keep all editable rules available when connection status is unknown. */}}
 function readSettings(){
- const settings={icon_style:field('icon_style').value,display_window:field('display_window').value,poll_seconds:Math.round(Number(field('poll_minutes').value)*60),visible_agents:{},alerts_enabled:field('alerts_enabled').checked,notify_limits:field('notify_limits').checked,alert_rules:{}};
+ const settings={icon_style:field('icon_style').value,display_window:field('display_window').value,poll_seconds:Math.round(Number(field('poll_minutes').value)*60),visible_agents:{},alerts_enabled:field('alerts_enabled').checked,notify_limits:field('notify_limits').checked,alerts_paused_until:draftPausedUntil,alert_rules:{}};
  for(const key of Object.keys(names))settings.visible_agents[key]=field('visible_'+key).checked;
  for(const key of Object.keys(ruleNames))settings.alert_rules[key]={enabled:field(key+'_enabled').checked,threshold:Number(field(key+'_threshold').value),recovery:field(key+'_recovery').checked};
  return settings;
 }
 function settingsKey(settings){
- return JSON.stringify([settings.icon_style,settings.display_window,settings.poll_seconds,Object.keys(names).map(key=>!!settings.visible_agents[key]),!!settings.alerts_enabled,!!settings.notify_limits,Object.keys(ruleNames).map(key=>{const r=settings.alert_rules[key];return [!!r.enabled,r.threshold,!!r.recovery];})]);
+ return JSON.stringify([settings.icon_style,settings.display_window,settings.poll_seconds,settings.alerts_paused_until || 0,Object.keys(names).map(key=>!!settings.visible_agents[key]),!!settings.alerts_enabled,!!settings.notify_limits,Object.keys(ruleNames).map(key=>{const r=settings.alert_rules[key];return [!!r.enabled,r.threshold,!!r.recovery];})]);
 }
 function fillSettings(settings) {
  savedSettings=settings;for(const radio of form.querySelectorAll('[name="icon_style"]'))radio.checked=radio.value===settings.icon_style;
  field('display_window').value=settings.display_window;field('poll_minutes').value=settings.poll_seconds/60;
+ draftPausedUntil=settings.alerts_paused_until || 0;const paused=draftPausedUntil>Date.now()/1000;field('alert_pause').querySelector('[value="until"]').hidden=!paused;field('alert_pause').value=paused?'until':'none';renderPauseState();
  for(const key of Object.keys(names))setChecked('visible_'+key,settings.visible_agents[key]);
  setChecked('alerts_enabled',settings.alerts_enabled);setChecked('notify_limits',settings.notify_limits);drawRules(settings);
 }
@@ -164,12 +270,16 @@ function updateSettingsControls(){
  startupDirty=!!(savedStartup && savedStartup.supported && $('startup-enabled').checked!==savedStartup.enabled);
  const dirty=settingsDirty || startupDirty;
  $('settings-fields').disabled=settingsBusy || !savedSettings;form.setAttribute('aria-busy',String(settingsBusy));
+ renderThemeControl();
  $('startup-enabled').disabled=settingsBusy || startupLoading || !savedStartup || !savedStartup.supported;
  $('retry-startup').disabled=settingsBusy || startupLoading;
  $('save-settings').disabled=settingsBusy || !savedSettings || !dirty;$('reset-settings').disabled=settingsBusy || !dirty;
  $('notification-options').hidden=!field('alerts_enabled').checked && !form.querySelector('#notification-options :invalid');
  for(const row of form.querySelectorAll('.alert-rule'))row.classList.toggle('rule-off',!field(row.dataset.rule+'_enabled').checked);
+ if(reloadPending)showReloadNotice(settingsDirty || startupDirty?'앱이 업데이트되었습니다. 변경사항을 저장하거나 취소한 뒤 화면을 갱신해 주세요.':'앱이 업데이트되었습니다. 화면을 갱신해 주세요.');
 }
+function renderPauseState(){const paused=draftPausedUntil>Date.now()/1000;$('alert-pause-state').hidden=!paused;$('alert-pause-state').textContent=paused?new Date(draftPausedUntil*1000).toLocaleString('ko-KR')+'까지 중지한 뒤 자동으로 알림을 재개합니다.':'';}
+field('alert_pause').addEventListener('change',()=>{const value=field('alert_pause').value;if(value==='none')draftPausedUntil=0;else if(value==='hour')draftPausedUntil=Math.floor(Date.now()/1000)+3600;else if(value==='today'){const end=new Date();end.setHours(24,0,0,0);draftPausedUntil=Math.floor(end.getTime()/1000);}renderPauseState();});
 function setSettingsBusy(busy) {
  settingsBusy=busy;updateSettingsControls();
 }
@@ -210,15 +320,35 @@ async function loadStatus() {
    const title=document.createElement('div');title.className='dash-status-title';title.append(textNode('strong',agent.name),textNode('span',agent.label || '상태 확인 중','chip'+(['error','auth_error'].includes(agent.status)?' bad':'')));row.append(title);
    row.append(textNode('p','갱신 '+timeLabel(agent.last_success)+(agent.last_success && agent.age_minutes>=0?' · '+agent.age_minutes+'분 전':'')+(agent.source?' · '+agent.source:'')));
    if(agent.error)row.append(textNode('p',agent.error));
+   if(agent.next_query_at && Date.parse(agent.next_query_at)>Date.now())row.append(textNode('p','다음 조회 '+timeLabel(agent.next_query_at)));
    container.append(row);
   }
   if(!container.children.length)container.append(textNode('p','연결된 에이전트가 없습니다.','none'));
   $('activity-state').textContent=[data.refreshing?'한도 갱신 중':'',data.scanning?'로컬 토큰 집계 중':''].filter(Boolean).join(' · ');message('status-message','');
+  return data;
  } catch(e) { message('status-message','연결 상태를 확인하지 못했습니다. 표시된 정보는 직전 조회 결과입니다.',true); }
+}
+function refreshBusy(busy){document.querySelectorAll('[data-action="refresh"]').forEach(button=>button.disabled=busy);}
+async function watchRefresh(expectedID){
+ const watcher=++refreshWatcher,start=Date.now();refreshBusy(true);
+ try{
+  while(watcher===refreshWatcher && Date.now()-start<120000){
+   const data=await loadStatus();if(watcher!==refreshWatcher)return;if(!data)throw new Error('수집 상태를 확인할 수 없습니다. 앱 연결을 확인해 주세요.');
+   const job=data && data.refresh;
+   if(job && (!expectedID || job.id>=expectedID)){
+    const waiting=job.phase==='waiting',failed=job.phase==='failed';
+    const next=waiting && job.next_at?' · 다음 조회 '+timeLabel(job.next_at):'';
+    message('action-message',(job.message || (job.phase==='running'?'사용량을 갱신하고 있습니다.':waiting?'다음 조회를 기다리고 있습니다.':'갱신을 마쳤습니다.'))+next,failed);
+    if(['completed','waiting','failed'].includes(job.phase) && !data.scanning){await refreshSnapshots();if(page==='usage' && !compact)await loadHistory();return;}
+   }
+   await new Promise(resolve=>setTimeout(resolve,1000));
+  }
+  if(watcher===refreshWatcher)message('action-message','수집이 계속 진행 중입니다. 마지막 갱신 시각을 확인해 주세요.');
+ }finally{if(watcher===refreshWatcher)refreshBusy(false);}
 }
 document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',async()=>{
  const action=button.dataset.action;button.disabled=true;mutationCount++;
- try { await api('/api/actions','POST',{action});message('action-message',action==='refresh'?'새로고침을 요청했습니다. 수집이 끝나면 화면에 반영됩니다.':'상세 보기를 열었습니다.');if(action==='refresh')await loadStatus(); }
+ try { const result=await api('/api/actions','POST',{action});message('action-message',action==='refresh'?'갱신 요청을 접수했습니다.':'상세 보기를 열었습니다.');if(action==='refresh')await watchRefresh(result.refresh && result.refresh.id); }
  catch(e) { message('action-message',e.message,true); }
  finally { button.disabled=false;mutationCount--; }
 }));
@@ -397,12 +527,14 @@ function drawHistory() {
   const range=label(observedStart,true)+' ~ '+label(observedEnd,!sameDay);
   actual.append(textNode('p','약 '+duration+' 관측 ('+range+')','pace-note pace-observation-range'));
  }else actual.append(textNode('p','비교할 관측 기록이 부족합니다.','pace-note'));
- metric(observedMetrics,'현재 환산 속도',ready?forecast.rate_per_day:null,'pace-recent');
+ metric(observedMetrics,'전체 관측 환산 속도',observed && Number.isFinite(forecast.rate_per_day) && forecast.rate_per_day>0?forecast.rate_per_day:null,'pace-recent');
+ if(forecast && Number.isFinite(forecast.recent_rate_per_day))metric(observedMetrics,'최근 '+forecast.recent_minutes+'분 환산 속도',forecast.recent_rate_per_day,'pace-recent-window');
  const target=metric(metrics,'초기화까지의 하루 예산',budget,'pace-target');
  if(budget===0)target.append(textNode('p','남은 한도 없음','pace-note'));
  else if(pace && pace.reduction>0)plan.append(textNode('p','현재 환산 속도보다 '+(pace.reduction<1?'1% 미만':Math.min(99,Math.round(pace.reduction))+'%')+' 적게 사용','pace-note pace-reduction'));
  if(budget>0 && forecast.reset_at*1000-historyData.rangeEnd<86400000 && forecast.reset_at*1000>historyData.rangeEnd)target.append(textNode('p','시간당 '+quotaPaceLabel(budget/24),'pace-note'));
  box.append(groups);
+ if(forecast && forecast.stability_reason)box.append(textNode('p',forecast.stability_reason,'pace-note pace-stability'));
  if(!ready){box.append(textNode('p',forecast && forecast.reason || '예측에 필요한 기록이 부족합니다.','pace-empty'));return;}
  box.classList.toggle('risk',!!forecast.exhausts_before_reset);
  if(forecast.estimated_exhaustion){
@@ -432,14 +564,14 @@ async function loadHistory() {
  }
  catch(e) { if(request===historyRequest)message('history-message',historyData?'기록을 불러오지 못했습니다. 표시된 그래프는 직전 조회 결과입니다.':'기록을 불러오지 못했습니다. 기간을 다시 선택해 주세요.',true); }
 }
-$('history-agent').addEventListener('change',()=>{historySelectionTouched=true;drawHistory();});$('history-window').addEventListener('change',()=>{historySelectionTouched=true;drawHistory();});$('history-days').addEventListener('change',()=>{historySelectionTouched=true;loadHistory();});
-$('history-zoom').addEventListener('click',()=>{historyZoom=!historyZoom;drawHistory();});
+$('history-agent').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();drawHistory();});$('history-window').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();drawHistory();});$('history-days').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();loadHistory();});
+$('history-zoom').addEventListener('click',()=>{historyZoom=!historyZoom;saveHistoryView();drawHistory();});
 let chartResizeFrame=0;
 window.addEventListener('resize',()=>{if(page!=='usage' || compact)return;cancelAnimationFrame(chartResizeFrame);chartResizeFrame=requestAnimationFrame(drawHistory);});
 async function refreshSnapshots() {
- const res=await fetch(location.pathname,{cache:'no-store'});if(!res.ok)throw new Error('snapshot');const doc=new DOMParser().parseFromString(await res.text(),'text/html');
+ const res=await fetch(location.pathname+location.search,{cache:'no-store'});if(!res.ok)throw new Error('snapshot');const doc=new DOMParser().parseFromString(await res.text(),'text/html');
  const ids=page==='usage'?['usage-snapshot','snapshot-time']:page==='tokens'?['token-snapshot','snapshot-time']:['snapshot-time'];
- for(const id of ids) { const source=doc.getElementById(id), target=$(id);if(source && target)target.replaceChildren(...Array.from(source.childNodes)); }
+ for(const id of ids) { const source=doc.getElementById(id), target=$(id);if(source && target){if(id==='token-snapshot')dismissTokenDetails();target.replaceChildren(...Array.from(source.childNodes));} }
 }
 async function poll() {
  if(polling || document.hidden || mutationCount)return;polling=true;
@@ -447,7 +579,18 @@ async function poll() {
  catch(e) { message(page==='settings'?'status-message':'action-message','화면 자동 갱신을 완료하지 못했습니다. 앱 연결을 확인해 주세요.',true); }
  finally { polling=false; }
 }
-if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();if(location.hash==='#system-details')$('system-details').open=true;}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
+const tokenForm=$('token-filter-form');
+if(page==='tokens' && tokenForm){
+ const options={days:$('token-days').value,model:$('token-model').value,project:$('token-project').value,all:$('token-all').checked};
+ const query=new URLSearchParams(location.search),hasExplicit=['days','model','project','all'].some(key=>query.has(key)),saved=storageRead('usage-tray-token-view');
+ if(!hasExplicit && saved && [7,14,30].includes(Number(saved.days))){
+  const params=new URLSearchParams({days:String(saved.days)});if(typeof saved.model==='string' && saved.model)params.set('model',saved.model);if(typeof saved.project==='string' && saved.project)params.set('project',saved.project);if(saved.all===true)params.set('all','1');
+  if(params.toString()!==new URLSearchParams({days:options.days}).toString() || options.days!==String(saved.days))location.replace('/tokens?'+params.toString());
+ }
+ storageWrite('usage-tray-token-view',options);
+ tokenForm.addEventListener('change',()=>{storageWrite('usage-tray-token-view',{days:$('token-days').value,model:$('token-model').value,project:$('token-project').value,all:$('token-all').checked});tokenForm.requestSubmit();});
+}
+if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);checkAppMetadata();setInterval(checkAppMetadata,10000);setInterval(renderPauseState,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAppMetadata();poll();}});
 })();
 `

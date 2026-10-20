@@ -7,7 +7,7 @@ package main
 //	상세    : 메뉴 → 상세 보기. 127.0.0.1 의 HTML 한 장을 브라우저로 연다.
 //	알림    : 임계값을 처음 넘을 때 한 번. 회복하면 다시 무장한다.
 //
-// 자격증명이 있는 에이전트만 낸다. 둘 다 없으면 아무것도 띄우지 않고 끝낸다.
+// 계정이 없어도 연결 대기 트레이를 띄우고 새 자격증명을 주기적으로 발견한다.
 //
 // 단일 인스턴스는 고정 포트 점유로 판정한다 — 뮤텍스보다 이식성이 좋고, 그 포트가 곧 상세 화면이다.
 
@@ -105,6 +105,7 @@ func main() {
 	restartExplorer := flag.Bool("restart-explorer", false, "-promote 와 함께 쓰면 explorer 를 재시작해 바로 적용한다")
 	install := flag.Bool("install", false, "로그인 자동 실행을 걸고, 아이콘을 꺼내고, 지금 띄운다")
 	uninstall := flag.Bool("uninstall", false, "-install 로 건 자동 실행을 뗀다")
+	discover := flag.Bool("discover", false, "새로 연결된 에이전트의 트레이도 자동으로 연다")
 	flag.Parse()
 	if _, ok := ports[tag()]; !ok {
 		fmt.Fprintln(os.Stderr, "지원하지 않는 -only 값")
@@ -134,18 +135,7 @@ func main() {
 		return
 	}
 
-	agents.claude, agents.codex = detectAgents()
-	agents.antigravity = detectAntigravity()
-	switch *only {
-	case "claude":
-		agents.antigravity = false
-		agents.codex = false
-	case "antigravity":
-		agents.claude, agents.codex = false, false
-	case "codex":
-		agents.antigravity = false
-		agents.claude = false
-	}
+	agents = filterDiscoveredAgents(discoverAgents(), tag())
 	logf("agents: claude=%v codex=%v", agents.claude, agents.codex)
 
 	if *scan {
@@ -155,26 +145,16 @@ func main() {
 		return
 	}
 
-	if !agents.claude && !agents.codex && !agents.antigravity {
-		fmt.Println("쓸 수 있는 에이전트가 없다 (Claude Code · Codex 자격증명 없음)")
-		logf("no agent credentials found; exit")
+	// 단일 계정과 연결 대기는 기존 기본 URL·상태 파일을 그대로 사용한다.
+	// 여러 계정이 처음부터 있으면 기존처럼 에이전트별 자식으로 분리한다.
+	autoDiscover := *discover || tag() == ""
+	if !*once && needsAgentSplit(agents, tag(), splitPerAgent()) {
+		spawnChildren(agentNames(agents))
 		return
 	}
 
-	// 여럿을 쓰는데 -only 가 없으면, 에이전트별로 자식을 하나씩 띄우고 이 프로세스는 빠진다.
-	// 아이콘이 갈라지는 지점이 여기다. 맥은 이렇게 하면 메뉴바에 아무것도 안 뜨므로 한
-	// 프로세스로 간다 — splitPerAgent 주석에 이유가 있다.
-	// 수집(refresh)보다 먼저 해야 부모가 상태 파일을 남기지 않는다 — 접미사 없는 state.json
-	// 은 한쪽만 쓰는 사람의 파일이다.
-	if tag() == "" && !*once && splitPerAgent() {
-		if kids := activeAgents(); len(kids) > 1 {
-			spawnChildren(kids)
-			return
-		}
-	}
-
-	refresh()
 	if *once {
+		refresh()
 		mu.RLock()
 		s := *state
 		mu.RUnlock()
@@ -198,6 +178,9 @@ func main() {
 		logf("already running (%s); exit", listenAddr())
 		return
 	}
+	runtimeAutoDiscover = autoDiscover
+	runtimeCloseListener = ln.Close
+	refresh()
 	go serve(ln)
 	systray.Run(onReady, func() { logf("exit") })
 }
@@ -233,12 +216,18 @@ func keepLastGood(cur, prev AgentUsage, prevAt time.Time) AgentUsage {
 }
 
 var lastFetch struct{ claude, codex, antigravity time.Time }
+var refreshMu sync.Mutex
 
 func refresh() {
 	refreshFor(agents)
 }
 
 func refreshFor(enabled enabledAgents) {
+	refreshMu.Lock()
+	defer refreshMu.Unlock()
+	started := time.Now()
+	beginRefreshJob(started)
+	attempts, failures := 0, 0
 	mu.RLock()
 	prevState := *state
 	mu.RUnlock()
@@ -246,23 +235,32 @@ func refreshFor(enabled enabledAgents) {
 	c, x, a := cachedUsage(prevState.Claude), cachedUsage(prevState.Codex), cachedUsage(prevState.Antigravity)
 	if enabled.claude {
 		// 최소 간격을 지킨다. 그 사이에는 직전값을 그대로 쓴다(아래 keepLastGood).
-		if time.Since(lastFetch.claude) >= claudePollMin {
-			lastFetch.claude = time.Now()
+		if reserveProviderQuery(time.Now(), &lastFetch.claude, claudePollMin, claudeBackoffUntil) {
 			c = fetchClaude()
+			attempts++
+			if c.Error != "" {
+				failures++
+			}
 		}
 		c = keepLastGood(c, prevState.Claude, prevState.Updated)
 	}
 	if enabled.codex {
-		if time.Since(lastFetch.codex) >= codexPollMin {
-			lastFetch.codex = time.Now()
+		if reserveProviderQuery(time.Now(), &lastFetch.codex, codexPollMin, time.Time{}) {
 			x = fetchCodex()
+			attempts++
+			if x.Error != "" {
+				failures++
+			}
 		}
 		x = keepLastGood(x, prevState.Codex, prevState.Updated)
 	}
 	if enabled.antigravity {
-		if time.Since(lastFetch.antigravity) >= 2*time.Minute {
-			lastFetch.antigravity = time.Now()
+		if reserveProviderQuery(time.Now(), &lastFetch.antigravity, 2*time.Minute, time.Time{}) {
 			a = fetchAntigravity()
+			attempts++
+			if a.Error != "" {
+				failures++
+			}
 		}
 		a = keepLastGood(a, prevState.Antigravity, prevState.Updated)
 	}
@@ -284,6 +282,7 @@ func refreshFor(enabled enabledAgents) {
 		logf("history: %v", err)
 	}
 	checkAlerts(&snapshot)
+	finishRefreshJob(time.Now(), enabled, attempts, failures)
 }
 
 func summarize(s *State) string {
@@ -459,6 +458,7 @@ func onReady() {
 	}
 	settingsError := err != nil
 	trayVisible, visibilitySet := true, false
+	themeStamp := trayThemeStamp(settings.Theme)
 	// 맡은 에이전트의 창을 줄마다 하나씩. 클릭 대상이 아니므로 비활성으로 둔다.
 	infoItems := []*systray.MenuItem{}
 	for i := 0; i < 14; i++ {
@@ -482,6 +482,8 @@ func onReady() {
 	// 두 에이전트를 한 아이콘에 담을 수 없으므로(systray 는 아이콘 1개다)
 	// 주간 남은량이 더 적은 쪽을 아이콘에 띄우고, 둘 다 툴팁·메뉴·상세에 낸다.
 	paint := func() {
+		applyTrayTheme(settings.Theme)
+		themeStamp = trayThemeStamp(settings.Theme)
 		mu.RLock()
 		s := *state
 		mu.RUnlock()
@@ -501,8 +503,13 @@ func onReady() {
 		systray.SetIcon(trayIconStyle(left, brand, style))
 		systray.SetTitle("")
 		if !hasAvailableAgent(shown) {
-			systray.SetTooltip("token_usage_tray · 표시할 에이전트 없음 · 우클릭에서 설정")
-			systray.SetClickTooltip("표시할 에이전트가 없습니다.\n아래 설정 버튼에서 표시할 에이전트를 선택해 주세요.")
+			if hasAvailableAgent(s) {
+				systray.SetTooltip("Usage Tray · 표시할 에이전트 없음 · 우클릭에서 설정")
+				systray.SetClickTooltip("표시할 에이전트가 없습니다.\n아래 설정 버튼에서 표시할 에이전트를 선택해 주세요.")
+			} else {
+				systray.SetTooltip("Usage Tray · 계정 연결 대기 · 우클릭에서 설정")
+				systray.SetClickTooltip("계정 연결을 기다리고 있습니다.\nClaude 또는 Codex에 로그인하면 자동으로 연결됩니다.\n설정에서 표시할 에이전트도 확인할 수 있습니다.")
+			}
 		} else {
 			systray.SetTooltip(tooltip(&shown))
 			systray.SetClickTooltipRows(clickSummaryRows(&shown))
@@ -528,13 +535,11 @@ func onReady() {
 		}
 	}
 	chooseStyle := func(style iconStyle) {
-		next, err := loadTraySettings()
+		next, err := updateTraySettings(func(next *traySettings) error {
+			next.IconStyle = style
+			return nil
+		})
 		if err != nil {
-			logf("load settings: %v", err)
-			return
-		}
-		next.IconStyle = style
-		if err := saveTraySettings(next); err != nil {
 			logf("save settings: %v", err)
 			notify("아이콘 설정 저장 실패", "설정을 저장하지 못했다. 데이터 폴더의 로그를 확인한다.")
 			return
@@ -550,19 +555,21 @@ func onReady() {
 		tick := time.NewTicker(time.Duration(settings.PollSeconds) * time.Second)
 		tokenTick := time.NewTicker(tokenEvery)
 		settingsTick := time.NewTicker(time.Second)
+		discoveryTick := time.NewTicker(15 * time.Second)
 		defer tick.Stop()
 		defer tokenTick.Stop()
 		defer settingsTick.Stop()
+		defer discoveryTick.Stop()
 		// 수집 중에도 설정 메뉴와 다른 프로세스의 설정을 바로 처리한다.
 		// 각 수집은 하나만 실행하고, 에이전트 선택은 시작할 때 복사한다.
 		refreshed := make(chan struct{}, 1)
 		scanned := make(chan *TokenStats, 1)
-		refreshing, scanning := false, false
+		var refreshGate refreshRunGate
+		scanning := false
 		startRefresh := func() {
-			if refreshing {
+			if !refreshGate.start(runtimeHandingOff) {
 				return
 			}
-			refreshing = true
 			collectingRefresh.Store(true)
 			enabled := agents
 			go func() {
@@ -571,7 +578,7 @@ func onReady() {
 			}()
 		}
 		startScan := func() {
-			if scanning {
+			if scanning || runtimeHandingOff {
 				return
 			}
 			scanning = true
@@ -583,9 +590,12 @@ func onReady() {
 		for {
 			select {
 			case <-refreshed:
-				refreshing = false
+				pending := refreshGate.finish()
 				collectingRefresh.Store(false)
 				paint()
+				if pending {
+					startRefresh()
+				}
 			case t := <-scanned:
 				scanning = false
 				collectingTokens.Store(false)
@@ -594,6 +604,12 @@ func onReady() {
 				mu.Unlock()
 			case <-settingsTick.C:
 				updateHeartbeat()
+				if trayThemeStamp(settings.Theme) != themeStamp {
+					paint()
+				}
+				if waitingRefreshDue(time.Now()) {
+					startRefresh()
+				}
 				// Hidden processes must restore the settings entry when a sibling exits,
 				// independently of a potentially hour-long collection interval.
 				mu.RLock()
@@ -622,6 +638,7 @@ func onReady() {
 			case action := <-appActions:
 				switch action {
 				case "refresh":
+					discoverRuntimeAgents()
 					startRefresh()
 					startScan()
 				case "detail":
@@ -632,6 +649,7 @@ func onReady() {
 			case action := <-systray.ClickActionCh:
 				switch action {
 				case "refresh":
+					discoverRuntimeAgents()
 					startRefresh()
 					startScan()
 				case "detail":
@@ -639,17 +657,13 @@ func onReady() {
 				case "settings":
 					openURL("http://" + listenAddr() + "/settings")
 				}
+			case <-discoveryTick.C:
+				if discoverRuntimeAgents() {
+					startRefresh()
+					startScan()
+				}
 			case <-tick.C:
-				// 새로 로그인한 에이전트가 있으면 반영한다(끄는 것은 재시작 때만).
-				// -only 로 일부러 끈 쪽은 되살리지 않는다.
-				if c, x := detectAgents(); *only == "" && ((c && !agents.claude) || (x && !agents.codex)) {
-					agents.claude = agents.claude || c
-					agents.codex = agents.codex || x
-					logf("agent appeared: claude=%v codex=%v", agents.claude, agents.codex)
-				}
-				if tag() == "" {
-					agents.antigravity = agents.antigravity || detectAntigravity()
-				}
+				discoverRuntimeAgents()
 				startRefresh()
 			case <-tokenTick.C:
 				startScan()
@@ -666,9 +680,7 @@ func onReady() {
 			case <-mNumber.ClickedCh:
 				chooseStyle(iconStyleNumber)
 			case <-mRefresh.ClickedCh:
-				if tag() == "" {
-					agents.antigravity = agents.antigravity || detectAntigravity()
-				}
+				discoverRuntimeAgents()
 				startRefresh()
 				startScan()
 			case <-mFolder.ClickedCh:
@@ -885,13 +897,18 @@ func spawnChildren(names []string) {
 		return
 	}
 	for _, a := range names {
-		cmd := exec.Command(exe, "-only", a)
+		if agentPortInUse(a) {
+			runtimeObservedSiblings[a] = true
+			continue
+		}
+		cmd := exec.Command(exe, "-only", a, "-discover")
 		hideWindow(cmd)
 		if err := cmd.Start(); err != nil {
 			logf("%s 인스턴스를 못 띄웠다: %v", a, err)
 			continue
 		}
 		_ = cmd.Process.Release()
+		runtimeObservedSiblings[a] = true
 		logf("spawned: -only %s", a)
 	}
 }

@@ -15,8 +15,8 @@ func TestDashboardAvailableBeforeFirstTokenScan(t *testing.T) {
 	if strings.Contains(page, `http-equiv="refresh"`) {
 		t.Fatal("full-page refresh would discard unsaved settings")
 	}
-	if strings.Count(page, "<script>") != 1 || strings.Count(page, "</script>") != 1 || !strings.HasSuffix(page, "</body></html>") {
-		t.Fatal("dashboard must initialize once and close the document before the first scan")
+	if strings.Count(page, "<script>") != 1 || strings.Count(page, `<script id="theme-init">`) != 1 || strings.Count(page, "</script>") != 2 || !strings.HasSuffix(page, "</body></html>") {
+		t.Fatal("theme must initialize once before first paint and dashboard once before closing the document")
 	}
 	if strings.Contains(page, `<script src=`) || strings.Contains(page, "cdn.") {
 		t.Fatal("local dashboard must not depend on a remote script")
@@ -28,7 +28,7 @@ func TestDashboardPreservesExistingTokenCharts(t *testing.T) {
 	s.Claude.Available = true
 	s.Codex.Available = true
 	page := renderPage(s, &TokenStats{})
-	for _, expected := range []string{"Claude · 14일 토큰", "Codex · 14일 토큰", "모델별 · 7일", "프로젝트별 · 7일", `data-agent="claude"`, `data-agent="codex"`} {
+	for _, expected := range []string{"Claude · 14일 토큰", "Codex · 14일 토큰", "모델별 · 14일", "프로젝트별 · 14일", `data-agent="claude"`, `data-agent="codex"`} {
 		if !strings.Contains(page, expected) {
 			t.Errorf("existing usage view lost %q", expected)
 		}

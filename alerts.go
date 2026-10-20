@@ -3,12 +3,21 @@ package main
 import (
 	"fmt"
 	"maps"
+	"time"
 )
 
 type usageAlert struct{ Title, Message string }
 
 // Pure transitions make threshold, deduplication and recovery behavior testable.
 func alertTransitions(s *State, settings traySettings) []usageAlert {
+	return alertTransitionsAt(s, settings, time.Now())
+}
+
+func alertTransitionsAt(s *State, settings traySettings, now time.Time) []usageAlert {
+	// A pause preserves deduplication state; after expiry the next sample resumes normally.
+	if settings.AlertsPausedUntil > now.Unix() {
+		return nil
+	}
 	s.Alerts = maps.Clone(s.Alerts)
 	if s.Alerts == nil {
 		s.Alerts = map[string]bool{}

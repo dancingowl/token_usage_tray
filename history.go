@@ -36,6 +36,10 @@ type usageForecast struct {
 	DailyBudget         *float64          `json:"daily_budget,omitempty"`
 	Samples             int               `json:"samples"`
 	Observation         *usageObservation `json:"observation,omitempty"`
+	RecentRatePerDay    *float64          `json:"recent_rate_per_day,omitempty"`
+	RecentMinutes       int               `json:"recent_minutes,omitempty"`
+	Stability           string            `json:"stability"`
+	StabilityReason     string            `json:"stability_reason,omitempty"`
 }
 
 // Actual endpoint change within the same contiguous quota cycle. This is an
@@ -224,7 +228,7 @@ func forecastUsageHistory(samples []usageHistorySample, now time.Time) []usageFo
 				continue
 			}
 			first, last := cycle[0], cycle[len(cycle)-1]
-			f := usageForecast{Agent: agent, Window: window, Samples: len(cycle)}
+			f := usageForecast{Agent: agent, Window: window, Samples: len(cycle), ResetAt: last.ResetAt, Stability: "collecting"}
 			if len(cycle) >= 2 && last.At.After(first.At) && now.Sub(last.At) <= historyFreshness &&
 				(last.ResetAt == 0 || time.Unix(last.ResetAt, 0).After(now)) {
 				f.Observation = &usageObservation{StartedAt: first.At, EndedAt: last.At,
@@ -259,12 +263,60 @@ func forecastUsageHistory(samples []usageHistorySample, now time.Time) []usageFo
 					f.ExhaustsBeforeReset = estimated.Before(time.Unix(last.ResetAt, 0))
 					f.Ready = true
 					f.Reason = "현재 한도 주기의 첫 관측부터 최근 관측까지 감소 속도가 계속된다는 선형 예상입니다."
+					assessForecastStability(&f, cycle)
 				}
 			}
 			out = append(out, f)
 		}
 	}
 	return out
+}
+
+// Compare independently observed time windows instead of presenting a fabricated
+// statistical confidence score. The endpoint estimate remains unchanged when the
+// available evidence is short but not contradictory.
+func assessForecastStability(f *usageForecast, cycle []usageHistorySample) {
+	first, last := cycle[0], cycle[len(cycle)-1]
+	duration := last.At.Sub(first.At)
+	f.Stability = "limited"
+	f.StabilityReason = "관측 기간이 짧아 예상 소진 시점이 크게 바뀔 수 있습니다."
+	if duration >= 2*time.Hour && first.Left-last.Left >= 3 {
+		f.Stability, f.StabilityReason = "steady", "전체 관측 구간의 평균 속도에 따른 추정입니다."
+	}
+	if duration < time.Hour || len(cycle) < 4 {
+		return
+	}
+	window := min(time.Hour, duration/2)
+	var recent *usageHistorySample
+	for i := range cycle {
+		if !cycle[i].At.Before(last.At.Add(-window)) && last.At.Sub(cycle[i].At) >= 30*time.Minute {
+			recent = &cycle[i]
+			break
+		}
+	}
+	if recent == nil {
+		return
+	}
+	elapsed := last.At.Sub(recent.At)
+	rate := float64(recent.Left-last.Left) / elapsed.Hours() * 24
+	f.RecentRatePerDay, f.RecentMinutes = &rate, int(elapsed.Minutes())
+	// An integer quota can remain unchanged for a while. Require several hours
+	// and multiple percentage points before treating a flat recent window as a
+	// meaningful slowdown rather than rounding noise.
+	if duration < 2*time.Hour || len(cycle) < 6 || first.Left-last.Left < 3 || f.RatePerDay <= 0 {
+		return
+	}
+	ratio := rate / f.RatePerDay
+	difference := rate - f.RatePerDay
+	if difference < 0 {
+		difference = -difference
+	}
+	if difference >= 12 && (ratio >= 2.5 || ratio <= .4) {
+		f.Stability = "changing"
+		f.StabilityReason = "최근 사용 속도가 전체 관측 속도와 크게 달라졌습니다."
+		f.Ready, f.EstimatedExhaustion, f.ExhaustsBeforeReset = false, nil, false
+		f.Reason = "사용 속도가 바뀌어 소진 시점 추정을 잠시 보류합니다."
+	}
 }
 
 func usageHistorySnapshot(now time.Time, days int) ([]usageHistorySample, []usageForecast, error) {
