@@ -244,6 +244,7 @@ header{margin-bottom:22px}
 .header-top{display:flex;align-items:center;justify-content:space-between;gap:16px 24px;flex-wrap:wrap;margin-bottom:20px}
 .header-status{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;margin-left:auto}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
+.app-version{color:var(--sub);font-size:12px;font-weight:400;white-space:nowrap}
 .app-icon{width:34px;height:34px;flex:none;border-radius:9px}
 h1{font-size:21px;line-height:1.2;letter-spacing:-.03em;margin:0;font-weight:750}
 .meta{color:var(--dim);font-size:12px}
@@ -359,8 +360,8 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 <title>Usage Tray · ` + pageTitle + `</title><style>` + pageCSS + dashboardCSS + `</style></head><body data-page="` + view + `">`)
 
 	fmt.Fprintf(&b, `<header><div class="header-top"><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
-		`<h1>Usage Tray</h1></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div>`,
-		base64.StdEncoding.EncodeToString(faviconPNG), s.Updated.Local().Format("15:04:05"))
+		`<h1>Usage Tray</h1><span class="app-version" id="app-version" aria-label="현재 버전">%s</span></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div>`,
+		base64.StdEncoding.EncodeToString(faviconPNG), html.EscapeString(appVersion), s.Updated.Local().Format("15:04:05"))
 	b.WriteString(headerActionsHTML + `</div></div><p id="action-message" class="dash-message header-message" role="status" aria-live="polite"></p><nav class="page-nav" aria-label="화면 이동">`)
 	for _, item := range []struct{ view, path, label string }{
 		{"usage", "/", "한도 현황"}, {"tokens", "/tokens", "토큰 통계"}, {"settings", "/settings", "설정"},
@@ -390,7 +391,8 @@ func renderPageView(s *State, tok *TokenStats, view string) string {
 	if s.Antigravity.Available {
 		b.WriteString(`<p class="none">Antigravity는 모델별 잔여 한도와 리셋 시각을 표시합니다. 토큰 수와 과거 사용량은 제공되지 않습니다.</p>`)
 	}
-	b.WriteString(`</section>` + dashboardHTML + `<section id="token-details" class="token-details panel dashboard-full" aria-labelledby="token-title"><h2 id="token-title">토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></h2><section id="token-snapshot">`)
+	dashboard := strings.NewReplacer("{{APP_VERSION}}", html.EscapeString(appVersion), "{{RELEASES_URL}}", releasesPageURL).Replace(dashboardHTML)
+	b.WriteString(`</section>` + dashboard + `<section id="token-details" class="token-details panel dashboard-full" aria-labelledby="token-title"><h2 id="token-title">토큰 통계<span class="summary-note">일별 · 모델별 · 프로젝트별</span></h2><section id="token-snapshot">`)
 	if tok == nil {
 		b.WriteString(`<div class="panel none">토큰 집계가 아직 없습니다. 첫 스캔이 끝나면 채워집니다.</div></section></section>` + dashboardScriptTag() + `</body></html>`)
 		return b.String()

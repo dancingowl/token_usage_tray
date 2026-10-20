@@ -38,7 +38,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
 .dash-history-chart{width:100%;height:250px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-point{fill:transparent;stroke:none}.dash-chart-point:focus{outline:none}
 .history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
-.dash-forecast{font-size:13px}.dash-forecast p{margin:4px 0}.dash-release{color:#0f766e}.dash-update-notes{white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--sub);font-size:12px}
+.dash-forecast{font-size:13px}.dash-forecast p{margin:4px 0}
 .pace-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.pace-group{min-width:0}.pace-group h3{font-size:14px;font-weight:650;margin:0 0 16px}.pace-plan{border-left:1px solid var(--line);padding-left:24px}.pace-metrics,.pace-observation-metrics{display:grid;gap:12px;margin:0}.pace-metric{min-width:0}.pace-metric dt{font-size:12px;color:var(--sub);margin-bottom:7px}.pace-metric dd{margin:0;font-size:26px;line-height:1.3;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.pace-metric dd span{font-size:13px;font-weight:400;letter-spacing:0;margin-left:4px;color:var(--sub)}.pace-note{font-size:12px;color:var(--sub);overflow-wrap:anywhere}.pace-metric .pace-note{margin-top:6px}.pace-plan .pace-metric{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:4px 12px}.pace-plan .pace-metric dt{margin:0;word-break:keep-all}.pace-plan .pace-metric dd{font-size:24px;white-space:nowrap}.pace-plan .pace-metric .pace-note{grid-column:1/-1}.pace-plan>.pace-reduction{margin-top:12px;word-break:keep-all}.pace-forecast{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:20px}.pace-forecast-label{display:block;color:var(--sub);font-size:12px;margin-bottom:7px}.pace-estimate{display:flex;align-items:baseline;gap:6px 10px;flex-wrap:wrap;min-width:0}.pace-date{font-size:30px;font-weight:750;line-height:1.25;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.pace-status{color:var(--sub);font-size:14px;font-weight:500}.risk .pace-status{color:#a33c3c}.pace-assumption{color:var(--sub);font-size:12px;padding-top:6px}.pace-empty{color:var(--sub);font-size:12px}
 body.summary-view{max-width:640px;padding:18px}body.summary-view #token-snapshot,body.summary-view .dashboard-full{display:none}body.summary-view h1{font-size:21px}body.summary-view .cl{font-size:26px}
 @media(max-width:620px){.dash-grid{grid-template-columns:1fr}.dash-form-grid{grid-template-columns:1fr}.dash-actions select{max-width:100%}.summary-note{display:none}.quick-toolbar{justify-content:flex-start}.quick-toolbar .dash-message{text-align:left}}
@@ -80,7 +80,7 @@ const dashboardHTML = `
  </div></section>
  <details id="system-details" class="panel page-section dashboard-full settings-info"><summary id="system-title">앱 정보<span class="summary-note">연결 · 업데이트</span></summary><div class="dash-grid">
   <section aria-labelledby="status-title"><h2 id="status-title">연결 상태</h2><div id="agent-status"><p class="none">상태를 확인하고 있습니다.</p></div><p id="activity-state" class="dash-note"></p><p id="status-message" class="dash-message" role="status"></p></section>
-  <section aria-labelledby="update-title"><h2 id="update-title">업데이트</h2><p id="update-state" class="dash-note">버전 정보를 확인하고 있습니다.</p><div class="dash-actions"><button type="button" id="check-update">업데이트 확인</button><a class="dash-release" id="release-link" target="_blank" rel="noopener noreferrer" hidden>릴리스 열기</a></div><pre id="update-notes" class="dash-update-notes" hidden></pre><p id="update-message" class="dash-message" role="status" aria-live="polite"></p></section>
+  <section aria-labelledby="update-title"><h2 id="update-title">버전</h2><p id="update-state" class="dash-note">현재 버전 {{APP_VERSION}}</p><div class="dash-actions"><a class="button" id="release-link" href="{{RELEASES_URL}}" target="_blank" rel="noopener noreferrer">릴리스 보기<span aria-hidden="true">↗</span></a></div><p class="dash-note">새 버전과 변경 내용은 GitHub에서 확인합니다.</p></section>
  </div></details>
 </div>
 `
@@ -222,24 +222,6 @@ document.querySelectorAll('[data-action]').forEach(button=>button.addEventListen
  catch(e) { message('action-message',e.message,true); }
  finally { button.disabled=false;mutationCount--; }
 }));
-function validReleaseURL(value) { try { const u=new URL(value);return u.protocol==='https:' && u.hostname==='github.com' && !u.username && !u.password && !u.port && u.pathname.startsWith('/dancingowl/token_usage_tray/releases/'); } catch(e) { return false; } }
-function renderUpdate(data) {
- const version=data.current_version || 'dev';
- const available=version!=='dev' && data.available;
- const checked=data.checked_at && !isNaN(new Date(data.checked_at)) && new Date(data.checked_at).getUTCFullYear()>1;
- const state=data.error?' · 최근 확인 실패':available?' · 새 버전 '+data.latest_version+' 사용 가능':data.latest_version?' · 최신 릴리스 '+data.latest_version+(version==='dev'?' · 개발 빌드는 자동 버전 비교를 지원하지 않습니다.':''):' · 아직 확인하지 않았습니다.';
- $('update-state').textContent='현재 '+version+state+(checked?' · 확인 '+timeLabel(data.checked_at):'');
- const link=$('release-link');link.hidden=!data.latest_version || !validReleaseURL(data.release_url);if(!link.hidden)link.href=data.release_url;else link.removeAttribute('href');
- $('update-notes').hidden=!data.notes;$('update-notes').textContent=data.notes || '';
- message('update-message',data.error || (available?'릴리스 내용을 확인한 뒤 다운로드해 주세요.':checked?'확인이 끝났습니다.':''),!!data.error);
-}
-async function loadUpdate(check) {
- if(check){$('check-update').disabled=true;message('update-message','새 버전을 확인하고 있습니다.');}
- try { renderUpdate(await api('/api/update',check?'POST':undefined,check?{}:undefined)); }
- catch(e) { message('update-message','업데이트 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',true); }
- finally { $('check-update').disabled=false; }
-}
-$('check-update').addEventListener('click',()=>loadUpdate(true));
 function svgElement(tag,attrs) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e; }
 let dismissHistoryDetails=()=>{};
 const planHelp=$('usage-plan-help'),planHelpTrigger=planHelp.querySelector('summary');
@@ -465,7 +447,7 @@ async function poll() {
  catch(e) { message(page==='settings'?'status-message':'action-message','화면 자동 갱신을 완료하지 못했습니다. 앱 연결을 확인해 주세요.',true); }
  finally { polling=false; }
 }
-if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();loadUpdate(false);if(location.hash==='#system-details')$('system-details').open=true;}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);
+if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();if(location.hash==='#system-details')$('system-details').open=true;}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
 })();
 `

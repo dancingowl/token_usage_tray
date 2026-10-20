@@ -31,6 +31,7 @@ var (
 	colAntigravity = color.NRGBA{111, 145, 255, 255}
 	colClaude      = color.NRGBA{217, 119, 87, 255}
 	colCodex       = color.NRGBA{16, 163, 127, 255}
+	colCodexNumber = color.NRGBA{8, 127, 104, 255} // #087F68: 숫자 아이콘의 가독성 보강.
 	colDanger      = color.NRGBA{239, 68, 68, 255}
 )
 
@@ -187,6 +188,9 @@ func trayStylePNG(left int, brand color.NRGBA, size int, style iconStyle) []byte
 		label = strconv.Itoa(min(left, 100))
 	}
 	ink := brand
+	if brand == colCodex {
+		ink = colCodexNumber
+	}
 	if left >= 0 && left < 20 {
 		ink = colDanger
 	}
