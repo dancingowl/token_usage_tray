@@ -95,6 +95,9 @@ func logf(format string, a ...interface{}) {
 }
 
 func main() {
+	if handleAutomaticUpdateMode() {
+		return
+	}
 	once := flag.Bool("once", false, "한 번 수집해 한 줄 출력하고 끝낸다")
 	scan := flag.Bool("tokens", false, "토큰만 스캔해 결과를 출력하고 끝낸다")
 	// 둘 다 쓰지만 한쪽만 보고 싶을 때, 그리고 단일 에이전트 화면을 확인할 때.
@@ -148,7 +151,7 @@ func main() {
 	// 단일 계정과 연결 대기는 기존 기본 URL·상태 파일을 그대로 사용한다.
 	// 여러 계정이 처음부터 있으면 기존처럼 에이전트별 자식으로 분리한다.
 	autoDiscover := *discover || tag() == ""
-	if !*once && needsAgentSplit(agents, tag(), splitPerAgent()) {
+	if !*once && !automaticUpdateRestart() && needsAgentSplit(agents, tag(), splitPerAgent()) {
 		spawnChildren(agentNames(agents))
 		return
 	}
@@ -550,6 +553,8 @@ func onReady() {
 	}
 	updateHeartbeat()
 	paint()
+	startAutomaticUpdates(func() { systray.Quit() })
+	automaticUpdateHealthy()
 
 	go func() {
 		tick := time.NewTicker(time.Duration(settings.PollSeconds) * time.Second)

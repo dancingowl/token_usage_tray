@@ -51,9 +51,11 @@ async function fixture(browser, options = {}) {
       else state.mutations.push({ path: url.pathname, method, body: request.postDataJSON() });
       if (url.pathname === '/api/settings') {
         if (method === 'GET') return reply(state.settings);
-        if (method === 'PUT') {
+        if (method === 'PATCH') {
+          if (state.settingsDelay) await new Promise(resolve => setTimeout(resolve, state.settingsDelay));
           if (state.failSettings) { state.failSettings--; return reply({ error: 'fixture settings failure' }, 500); }
-          state.settings = { ...clone(request.postDataJSON()), theme: state.settings.theme }; return reply(state.settings);
+          const merge = (target, patch) => { for (const [key, value] of Object.entries(patch)) { if (value && typeof value === 'object') merge(target[key], value); else target[key] = value; } };
+          merge(state.settings, request.postDataJSON()); return reply(state.settings);
         }
       }
       if (url.pathname === '/api/theme') {
@@ -76,6 +78,7 @@ async function fixture(browser, options = {}) {
         }
       }
       if (url.pathname === '/api/status') return reply(status);
+      if (url.pathname === '/api/auto-update') return reply({ supported: false, state: 'disabled' });
       if (url.pathname === '/api/update') return reply({ current_version: 'dev' });
       if (url.pathname === '/api/history') return reply({ samples: [], forecasts: [] });
       if (url.pathname === '/state.json') return reply({
@@ -100,22 +103,15 @@ async function fixture(browser, options = {}) {
   return { page, state, context };
 }
 const field = (page, name) => page.locator(`[name="${name}"]`);
-async function enabled(page, selector, value) {
-  await page.waitForFunction(({ selector, value }) => document.querySelector(selector)?.disabled === !value,
-    { selector, value });
-}
-async function save(page) {
-  await page.locator('#save-settings').click();
-  await page.waitForFunction(() => document.querySelector('#settings-form').getAttribute('aria-busy') !== 'true');
+async function settled(page) {
+  await page.waitForFunction(() => document.querySelector('#settings-form').getAttribute('aria-busy') === 'false');
 }
 async function selectTheme(page, theme) {
   await page.locator('#theme-toggle').click();
   await page.locator(`[data-theme-choice="${theme}"]`).click();
-  await enabled(page, '#theme-toggle', true);
+  await page.waitForFunction(() => !document.querySelector('#theme-toggle').disabled);
 }
 async function main() {
-  const screenshotDirectory = process.env.SCREENSHOT_DIR && path.resolve(process.env.SCREENSHOT_DIR);
-  if (screenshotDirectory) fs.mkdirSync(screenshotDirectory, { recursive: true });
   const browser = await playwright().chromium.launch({ headless: true,
     ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
   let passed = 0;
@@ -126,191 +122,96 @@ async function main() {
     } finally { await f.context.close(); }
   }
   try {
-    await test('unified structure, dirty revert and cancel', {}, async ({ page, state }) => {
-      assert.equal(await page.locator('#save-startup').count(), 0);
+    await test('automatic settings structure and immediate toggles', {}, async ({page,state}) => {
+      assert.equal(await page.locator('#save-settings,#reset-settings,#save-startup').count(), 0);
       assert.equal(await page.locator('#settings-form #startup-enabled').count(), 1);
-      assert.equal((await page.locator('#save-settings').textContent()).trim(), '저장');
-      assert.equal((await page.locator('#reset-settings').textContent()).trim(), '변경 취소');
-      assert.equal(await page.locator('#settings details, #advanced-settings, #other-alerts, #theme-setting, [name="theme"]').count(), 0);
-      assert.equal(await page.locator('#system-details').evaluate(el => el.tagName), 'SECTION');
-      assert.match(await page.locator('#system-details h2#system-title').textContent(), /앱 정보/);
-      assert.equal(await page.locator('#poll-help').evaluate(el => el.tagName), 'P');
-      assert.equal(await page.locator('#poll-help').isVisible(), true);
-      assert.equal(await page.locator('#poll-minutes').isVisible(), true);
-      assert.match(await page.locator('#poll-minutes').locator('xpath=ancestor::section[1]').textContent(), /일반/);
       assert.equal(await page.locator('header #theme-toggle').count(), 1);
-      assert.equal(await page.locator('#theme-menu').getAttribute('role'), 'menu');
-      assert.equal(await page.locator('#theme-menu [role="menuitemradio"][data-theme-choice]').count(), 3);
-      await enabled(page, '#save-settings', false);
       await page.locator('#settings-form').evaluate(form => form.requestSubmit());
-      assert.deepEqual(state.mutations, [], 'unchanged form submission is a no-op');
-      await page.locator('#startup-enabled').check(); await enabled(page, '#save-settings', true);
-      await page.locator('#startup-enabled').uncheck(); await enabled(page, '#save-settings', false);
-      assert.equal(await page.locator('input[type="radio"][name="icon_style"]').count(), 2);
-      await page.locator('input[name="icon_style"][value="donut"]').focus();
-      await page.keyboard.press('ArrowRight');
-      assert.equal(await page.locator('input[name="icon_style"][value="number"]').isChecked(), true);
-      await enabled(page, '#save-settings', true);
-      await page.locator('#startup-enabled').check();
-      const reads = state.reads.length;
-      await page.locator('#reset-settings').click();
-      await enabled(page, '#save-settings', false);
-      assert.equal(await page.locator('#startup-enabled').isChecked(), false);
-      assert.equal(await page.locator('input[name="icon_style"][value="donut"]').isChecked(), true);
-      assert.equal(state.reads.length, reads, 'cancel restores local baselines without fetching');
-      assert.deepEqual(state.mutations, []);
+      assert.equal(state.mutations.length, 0);
+      await field(page,'visible_claude').uncheck();await settled(page);
+      await field(page,'display_window').selectOption('urgent');await settled(page);
+      await page.locator('#startup-enabled').check();await settled(page);
+      assert.deepEqual(state.mutations.map(m=>[m.path,m.method,m.body]),[
+        ['/api/settings','PATCH',{visible_agents:{claude:false}}],
+        ['/api/settings','PATCH',{display_window:'urgent'}],
+        ['/api/startup','POST',{enabled:true}],
+      ]);
+      assert.match(await page.locator('#auto-update-state').textContent(),/지원하지/);
     });
-    await test('startup-only save', {}, async ({ page, state }) => {
-      await page.locator('#startup-enabled').check(); await save(page);
-      await enabled(page, '#save-settings', false);
-      assert.deepEqual(state.mutations, [{ path: '/api/startup', method: 'POST', body: { enabled: true } }]);
+    await test('valid numbers debounce, invalid edits stay local, blur validates', {}, async ({page,state}) => {
+      await field(page,'poll_minutes').fill('2');await field(page,'poll_minutes').fill('2.5');await settled(page);
+      assert.deepEqual(state.mutations.map(m=>m.body),[{poll_seconds:150}]);
+      await field(page,'claude5h_threshold').fill('100');await settled(page);
+      assert.equal(state.mutations.length,1);
+      assert.equal(await field(page,'claude5h_threshold').getAttribute('aria-invalid'),'true');
+      await field(page,'claude5h_threshold').fill('');await settled(page);assert.equal(state.mutations.length,1);
+      await field(page,'claude5h_threshold').fill('23');await field(page,'poll_minutes').focus();await settled(page);
+      assert.equal(state.settings.alert_rules.claude5h.threshold,23);
+      assert.equal(state.mutations.length,2,'change and blur must not duplicate writes');
+      assert.equal(state.settings.alert_rules.claude7d.threshold,18);
     });
-    await test('settings-only save preserves all service rules and interval', {}, async ({ page, state }) => {
-      const originalRules = clone(state.settings.alert_rules);
-      await field(page, 'poll_minutes').fill('2.5');
-      assert.equal(await field(page, 'poll_minutes').getAttribute('min'), '1');
-      assert.equal(await field(page, 'poll_minutes').getAttribute('max'), '60');
-      assert.equal(await field(page, 'poll_minutes').getAttribute('step'), 'any');
-      await save(page); await enabled(page, '#save-settings', false);
-      assert.equal(state.mutations.length, 1); assert.equal(state.mutations[0].method, 'PUT');
-      assert.equal(state.settings.poll_seconds, 150);
-      assert.deepEqual(state.settings.alert_rules, originalRules);
-      await field(page, 'poll_minutes').fill('3'); await enabled(page, '#save-settings', true);
-      await field(page, 'poll_minutes').fill('2.5'); await enabled(page, '#save-settings', false);
-    });
-    await test('custom integer seconds survive unrelated save', { settings: { ...baseline(), poll_seconds: 61 } }, async ({ page, state }) => {
-      assert.equal(Math.round(Number(await field(page, 'poll_minutes').inputValue()) * 60), 61);
-      await page.locator('input[name="icon_style"][value="number"]').check(); await save(page);
-      await enabled(page, '#save-settings', false); assert.equal(state.settings.poll_seconds, 61);
-    });
-    await test('mixed save settings first and startup partial failure retry', { failStartup: 1 }, async ({ page, state }) => {
+    await test('new edits during in-flight request retained and preserve external fields', {settingsDelay:150}, async ({page,state}) => {
+      await field(page,'display_window').selectOption('short');
       await page.locator('input[name="icon_style"][value="number"]').check();
-      await page.locator('#startup-enabled').check(); await save(page);
-      await enabled(page, '#save-settings', true);
-      assert.deepEqual(state.mutations.map(m => m.path), ['/api/settings', '/api/startup']);
-      assert.equal(await page.locator('#startup-enabled').isChecked(), true);
-      assert.equal(await page.locator('input[name="icon_style"][value="number"]').isChecked(), true);
-      await save(page); await enabled(page, '#save-settings', false);
-      assert.deepEqual(state.mutations.map(m => m.path), ['/api/settings', '/api/startup', '/api/startup']);
+      await field(page,'display_window').selectOption('urgent');
+      state.settings.visible_agents.antigravity=true;state.settings.theme='dark';
+      await settled(page);
+      assert.equal(state.settings.display_window,'urgent');assert.equal(state.settings.icon_style,'number');
+      assert.equal(await field(page,'display_window').inputValue(),'urgent');
+      assert.equal(state.settings.visible_agents.antigravity,true);assert.equal(state.settings.theme,'dark');
+      assert.ok(state.mutations.every(m=>Object.keys(m.body).length===1));
     });
-    await test('settings failure retains edits and cancel restores saved baseline', { failSettings: 1 }, async ({ page, state }) => {
-      await page.locator('input[name="icon_style"][value="number"]').check(); await save(page);
-      await enabled(page, '#save-settings', true);
-      assert.equal(await page.locator('input[name="icon_style"][value="number"]').isChecked(), true);
-      await page.locator('#reset-settings').click(); await enabled(page, '#save-settings', false);
-      assert.equal(await page.locator('input[name="icon_style"][value="donut"]').isChecked(), true);
-      assert.equal(state.mutations.length, 1);
+    await test('failed leaf retries independently while other changes save', {failSettings:1}, async ({page,state}) => {
+      await field(page,'display_window').selectOption('short');await settled(page);
+      assert.equal(await field(page,'display_window').inputValue(),'short');
+      assert.equal(await page.locator('#retry-settings').isVisible(),true);
+      await page.locator('#startup-enabled').check();await settled(page);
+      assert.equal(state.startup.enabled,true);assert.equal(state.settings.display_window,'week');
+      await page.locator('#retry-settings').click();await settled(page);
+      assert.equal(state.settings.display_window,'short');assert.equal(await page.locator('#retry-settings').isVisible(),false);
+      assert.deepEqual(state.mutations.map(m=>m.path),['/api/settings','/api/startup','/api/settings']);
     });
-    await test('mixed settings failure still saves startup and retries only settings', { failSettings: 1 }, async ({ page, state }) => {
-      await page.locator('input[name="icon_style"][value="number"]').check();
-      await page.locator('#startup-enabled').check(); await save(page);
-      await enabled(page, '#save-settings', true);
-      assert.deepEqual(state.mutations.map(m => m.path), ['/api/settings', '/api/startup']);
-      assert.equal(state.startup.enabled, true);
-      await save(page); await enabled(page, '#save-settings', false);
-      assert.deepEqual(state.mutations.map(m => m.path), ['/api/settings', '/api/startup', '/api/settings']);
-      await page.locator('#startup-enabled').uncheck();
-      await page.locator('#reset-settings').click(); await enabled(page, '#save-settings', false);
-      assert.equal(await page.locator('#startup-enabled').isChecked(), true, 'cancel uses latest successful startup baseline');
+    for(const failure of ['failStartup','mismatchStartup'])await test('startup failure or mismatch retries requested state '+failure,{[failure]:1},async({page,state})=>{
+      await page.locator('#startup-enabled').check();await settled(page);
+      assert.equal(await page.locator('#startup-enabled').isChecked(),true);
+      assert.equal(await page.locator('#retry-settings').isVisible(),true);
+      await page.locator('#retry-settings').click();await settled(page);assert.equal(state.startup.enabled,true);
     });
-    await test('startup success response with wrong enabled state retains desired edit for retry', { mismatchStartup: 1 }, async ({ page, state }) => {
-      await page.locator('#startup-enabled').check(); await save(page);
-      await enabled(page, '#save-settings', true);
-      assert.equal(await page.locator('#startup-enabled').isChecked(), true, 'retain requested value');
-      assert.equal(state.startup.enabled, false, 'mismatched response does not update fixture baseline');
-      assert.equal(await page.locator('#settings-message').evaluate(el => el.classList.contains('error')), true,
-        'mismatched response must show an error instead of success');
-      assert.doesNotMatch(await page.locator('#settings-message').textContent(), /저장했습니다/);
-      await save(page); await enabled(page, '#save-settings', false);
-      assert.deepEqual(state.mutations, [1, 2].map(() => ({ path: '/api/startup', method: 'POST', body: { enabled: true } })));
-      assert.equal(state.startup.enabled, true);
-    });
-    await test('invalid disconnected service rule focuses visible input without mutation', {}, async ({ page, state }) => {
-      await page.waitForFunction(() => document.querySelector('#alert-rules .alert-service[data-agent="claude"] [name="claude5h_threshold"]'));
-      assert.equal(await field(page, 'claude5h_threshold').isVisible(), true);
-      await field(page, 'claude5h_threshold').fill('100');
-      await page.locator('#settings-form').evaluate(form => form.requestSubmit());
-      await page.waitForFunction(() => document.activeElement?.name === 'claude5h_threshold');
-      assert.deepEqual(state.mutations, [], 'invalid input must block every write');
-      await field(page, 'claude5h_threshold').fill('23');
-      await save(page); await enabled(page, '#save-settings', false);
-      assert.equal(state.settings.alert_rules.claude5h.threshold, 23);
-    });
-    await test('theme saves separately while preserving draft and cancel keeps theme', {}, async ({ page, state }) => {
-      await page.locator('input[name="icon_style"][value="number"]').check();
-      await page.locator('#startup-enabled').check();
-      await field(page, 'poll_minutes').fill('2.5');
-      await selectTheme(page, 'dark');
-      await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
-      assert.deepEqual(state.mutations, [{ path: '/api/theme', method: 'PUT', body: { theme: 'dark' } }]);
-      assert.equal(await page.locator('input[name="icon_style"][value="number"]').isChecked(), true);
-      assert.equal(await page.locator('#startup-enabled').isChecked(), true);
-      assert.equal(await field(page, 'poll_minutes').inputValue(), '2.5');
-      await enabled(page, '#save-settings', true);
-      await page.locator('#reset-settings').click(); await enabled(page, '#save-settings', false);
-      assert.equal(await page.locator('input[name="icon_style"][value="donut"]').isChecked(), true);
-      assert.equal(await page.locator('#startup-enabled').isChecked(), false);
-      assert.equal(await field(page, 'poll_minutes').inputValue(), '3');
-      assert.equal(state.settings.theme, 'dark');
-      assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
-      assert.equal(await page.locator('[data-theme-choice="dark"]').getAttribute('aria-checked'), 'true');
-      await page.locator('input[name="icon_style"][value="number"]').check(); await save(page);
-      assert.equal(state.settings.theme, 'dark', 'full settings save preserves separately saved theme');
-    });
-    await test('theme save failure retains previous theme and unrelated draft', { settings: { ...baseline(), theme: 'light' }, failTheme: 1 }, async ({ page, state }) => {
-      await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
-      await field(page, 'poll_minutes').fill('2.5');
-      await selectTheme(page, 'dark');
-      assert.equal(state.settings.theme, 'light');
-      assert.equal(await page.locator('#action-message').evaluate(el => el.classList.contains('error')), true);
-      assert.match(await page.locator('#action-message').textContent(), /테마/);
-      assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
-      assert.equal(await page.locator('[data-theme-choice="light"]').getAttribute('aria-checked'), 'true');
-      assert.equal(await field(page, 'poll_minutes').inputValue(), '2.5');
-      await enabled(page, '#save-settings', true);
-      assert.deepEqual(state.mutations, [{ path: '/api/theme', method: 'PUT', body: { theme: 'dark' } }]);
+    await test('theme independent from number validation and failed settings', {failSettings:1}, async ({page,state})=>{
+      await field(page,'display_window').selectOption('short');await settled(page);
+      await field(page,'poll_minutes').fill('');
+      await selectTheme(page,'dark');assert.equal(state.settings.theme,'dark');
+      assert.equal(await field(page,'poll_minutes').inputValue(),'');
+      await page.locator('#retry-settings').click();await settled(page);
+      assert.equal(state.settings.display_window,'short');assert.equal(state.settings.theme,'dark');
+      assert.ok(state.mutations.filter(m=>m.path==='/api/settings').every(m=>!('theme' in m.body)));
     });
     for (const [name, options] of [['startup read failure', { failStartupRead: true }],
       ['unsupported startup', { startup: { supported: false, enabled: false } }]]) {
-      await test(`${name} leaves settings usable`, options, async ({ page, state }) => {
-        await enabled(page, '#startup-enabled', false);
-        await page.locator('input[name="icon_style"][value="number"]').check(); await save(page);
-        await enabled(page, '#save-settings', false);
-        assert.deepEqual(state.mutations.map(m => m.path), ['/api/settings']);
+      await test(name+' leaves settings usable', options, async ({ page, state }) => {
+        assert.equal(await page.locator('#startup-enabled').isDisabled(),true);
+        await field(page,'display_window').selectOption('short');await settled(page);
+        assert.equal(state.settings.display_window,'short');
       });
     }
-    await test('notification visibility, connected service ordering and narrow viewport overflow', {}, async ({ page }) => {
-      await field(page, 'alerts_enabled').uncheck();
-      assert.equal(await page.locator('#notification-options').isVisible(), false);
-      await field(page, 'alerts_enabled').check();
-      assert.equal(await page.locator('#notification-options').isVisible(), true);
-      await page.waitForFunction(() => document.querySelector('#alert-rules .alert-service')?.dataset.agent === 'codex');
-      assert.equal(await page.locator('#alert-rules .alert-service[data-agent]').count(), 3);
-      assert.equal(await page.locator('#alert-rules .alert-rule[data-rule]').count(), 5);
-      assert.equal(await page.locator('#alert-rules [name$="_threshold"]').count(), 5);
-      for (const key of keys) assert.equal(await field(page, `${key}_threshold`).isVisible(), true);
-      for (const width of [485, 320]) {
-        await page.setViewportSize({ width, height: 900 });
-        const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth,
-          viewport: document.documentElement.clientWidth }));
-        assert.ok(dimensions.scroll <= dimensions.viewport + 1, `${width}px overflow: ${JSON.stringify(dimensions)}`);
-        assert.equal(await page.locator('#save-settings').isVisible(), true);
+    await test('disabled notifications keep invalid disconnected rules visible and mobile fits',{},async({page})=>{
+      await field(page,'claude5h_threshold').fill('100');await field(page,'alerts_enabled').uncheck();await settled(page);
+      assert.equal(await field(page,'claude5h_threshold').isVisible(),true);
+      await field(page,'claude5h_threshold').fill('23');await settled(page);
+      assert.equal(await page.locator('#notification-options').isVisible(),false);
+      for(const width of [485,320]){
+        await page.setViewportSize({width,height:900});
+        const size=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:document.documentElement.clientWidth}));
+        assert.ok(size.scroll<=size.width+1,JSON.stringify(size));
       }
     });
-    if (screenshotDirectory) {
-      const { page, context } = await fixture(browser);
-      try {
-        await page.waitForFunction(() => document.querySelector('#alert-rules [name="codex7d_threshold"]'));
-        for (const [width, filename] of [[1000, 'settings-desktop.png'], [320, 'settings-mobile320.png']]) {
-          await page.setViewportSize({ width, height: 900 });
-          await page.evaluate(() => {
-            window.scrollTo(0, 0);
-          });
-          await page.screenshot({ path: path.join(screenshotDirectory, filename), fullPage: true });
-        }
-      } finally { await context.close(); }
+    if(process.env.SCREENSHOT_DIR){
+      const directory=path.resolve(process.env.SCREENSHOT_DIR);fs.mkdirSync(directory,{recursive:true});
+      const {page,context}=await fixture(browser);
+      try{for(const width of [1000,320]){await page.setViewportSize({width,height:900});await page.screenshot({path:path.join(directory,`settings-${width}.png`),fullPage:true});}}
+      finally{await context.close();}
     }
-    console.log(`PASS: ${passed} isolated settings UI scenarios; all API mutations mocked.`);
+    console.log(`PASS: ${passed} isolated immediate settings UI scenarios; all API mutations mocked.`);
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

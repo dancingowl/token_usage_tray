@@ -13,7 +13,8 @@ async function main() {
   vm.runInContext(`
     const elements = Object.fromEntries(['app-update-message','app-update-banner','reload-app'].map(id=>[id,{}]));
     const $ = id => elements[id];
-    let settingsDirty=false,startupDirty=false,settingsBusy=false,mutationCount=0,metadataBusy=false,reloadPending=false;
+    let pendingSettings=false,settingsBusy=false,mutationCount=0,metadataBusy=false,reloadPending=false;
+    function hasPendingSettings(){return pendingSettings;}
     let knownInstance='old',knownUI='ui',themeBusy=false,themeRequest=0;
     let reloads=0,theme='system';
     const document={hidden:false},location={reload(){reloads++;}},window={applyUsageTrayTheme(value){theme=value;}};
@@ -23,18 +24,18 @@ async function main() {
     ${section('function showReloadNotice(', "$('reload-app').addEventListener")}
   `, metadata);
   await vm.runInContext(`(async()=>{
-    settingsDirty=true;await checkAppMetadata();
+    pendingSettings=true;await checkAppMetadata();
     assert.equal(reloads,0);assert.equal(elements['reload-app'].disabled,true);assert.equal(reloadPending,true);
-    assert.equal(theme,'dark','saved theme is independent of unsaved form settings');
-    settingsDirty=false;startupDirty=true;await checkAppMetadata();assert.equal(reloads,0);
-    startupDirty=false;mutationCount=1;await checkAppMetadata();assert.equal(reloads,0);
+    assert.equal(theme,'dark','saved theme is independent of pending settings');
+    pendingSettings=false;settingsBusy=true;await checkAppMetadata();assert.equal(reloads,0);
+    settingsBusy=false;mutationCount=1;await checkAppMetadata();assert.equal(reloads,0);
     mutationCount=0;await checkAppMetadata();assert.equal(reloads,1);assert.equal(theme,'dark');
     response={instance_id:'old',ui_revision:'new-ui',theme:'light'};await checkAppMetadata();assert.equal(reloads,2);
     themeBusy=true;response.theme='dark';await checkAppMetadata();assert.equal(theme,'light');themeBusy=false;
     api=async()=>{themeRequest++;return response;};await checkAppMetadata();assert.equal(theme,'light','old metadata cannot replace a newer theme action');
     api=async()=>{throw new Error('server restarting');};await checkAppMetadata();assert.equal(metadataBusy,false);
   })()`, metadata);
-  console.log('PASS restart detection, dirty/startup/mutation protection, UI revision, retry');
+  console.log('PASS restart detection, pending mutation protection, UI revision, retry');
 
   const themeActions = vm.createContext({ assert });
   vm.runInContext(`
@@ -51,12 +52,12 @@ async function main() {
     assert.deepEqual(Object.keys(calls[0].body),['theme']);assert.equal(settingsDirty,true);assert.equal(draft.poll_seconds,180);assert.equal(savedSettings.poll_seconds,60);
     assert.equal(mutationCount,0);assert.equal(themeBusy,false);await saveTheme('dark');assert.equal(calls.length,1);
     fail=true;await saveTheme('light');assert.equal(themePreference,'dark');assert.match(lastMessage,/저장하지 못/);assert.equal(themeBusy,false);assert.equal(mutationCount,0);
-    settingsBusy=true;await saveTheme('system');assert.equal(calls.length,2);
+    settingsBusy=true;fail=false;await saveTheme('system');assert.equal(calls.length,3,'theme remains usable while settings load');
     settingsBusy=false;fail=false;themePreference='system';calls=[];
     const input={};api=async(path,method,body)=>{calls.push({path,method,body});document.activeElement=input;if(method==='PUT'){themeRequest++;themePreference='light';return {theme:'dark'};}return {theme:'light'};};
     await saveTheme('dark');assert.equal(themePreference,'light','late PUT must re-read a newer preference from another tab');assert.equal(calls.length,2);assert.equal(document.activeElement,input,'save completion must not steal editing focus');
   })()`, themeActions);
-  console.log('PASS independent theme save, dirty form preservation, failed save and busy guard');
+  console.log('PASS independent theme save, unrelated settings preservation and failed save');
 
   const refresh = vm.createContext({ assert, setTimeout: callback => callback() });
   vm.runInContext(`

@@ -112,10 +112,12 @@ macOS에서는 `export USAGE_TRAY_DATA_DIR="${TMPDIR}token-usage-tray-dev"`로 �
 ```powershell
 node scripts/test-history-bins.cjs
 node scripts/test-dashboard-upgrades.cjs
+node scripts/test-settings-queue.cjs
 ```
 
-두 번째 검증은 재시작 감지와 미저장 설정 보호, 다른 탭이 시작한 갱신 작업의 추적,
+두 번째 검증은 재시작 감지, 다른 탭이 시작한 갱신 작업의 추적,
 조회 조건 복원과 브라우저 저장소 차단 시 동작을 네트워크 없이 확인합니다.
+세 번째 검증은 직렬 설정 저장 큐의 빠른 연속 변경·경합·실패 재시도와 숫자 입력 지연 저장을 확인합니다.
 
 설정 UI는 `scripts/test-settings-ui.cjs`로 검증합니다. Node.js와 `playwright` 또는 `playwright-core`, Chromium 계열 브라우저가 필요합니다.
 앱의 `/settings` HTML과 읽기 전용 정적 자산을 받아야 하므로 **별도 터미널에서 앱 서버를 먼저 실행**합니다.
@@ -143,7 +145,7 @@ macOS도 같은 변수 이름을 `export`로 지정하고 설치한 Playwright C
 UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정·자동 실행·테마 저장도 브라우저 안의 fixture만 변경합니다.
 테마 fixture는 `/api/theme` GET/PUT과 `/api/meta`를 지원하며, 전체 설정 PUT은 별도로 저장한 테마를 보존합니다.
 실제 앱으로 전달하는 요청은 같은 origin의 페이지·정적 자산 GET뿐이며 다른 요청은 차단합니다.
-따라서 저장 순서·부분 실패 재시도·변경 취소·서비스별 전체 알림 표시·테마의 독립 저장과 실패 시 유지·좁은 화면 등을 확인하지만 실제 레지스트리 등록이나 API 수집 성공을 검증하지 않습니다.
+따라서 즉시 저장 순서·실패 재시도·숫자 입력 검증·서비스별 전체 알림 표시·테마 저장·좁은 화면 등을 확인하지만 실제 레지스트리 등록이나 API 수집 성공을 검증하지 않습니다.
 서버로 실행한 앱 자체의 수집은 계속 동작합니다. mock 범위와 실제 앱 동작을 혼동하지 않습니다.
 검증 후 앱을 종료하고 테스트 터미널을 닫거나 `BASE_URL`, `PLAYWRIGHT_MODULE_PATH`, `CHROME_PATH`, `SCREENSHOT_DIR`를 해제합니다.
 
@@ -159,7 +161,7 @@ UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정
 | `service.go`, `dashboard.go`, `page.go` | 루프백 API·상세 화면·설정 화면 |
 | `platform_windows.go`, `platform_unix.go`, `startup_settings_*.go` | OS 기능·자동 실행 등록 |
 | `icon.go`, `icon_text_*.go`, `assets.go` | 잔량 아이콘·앱 아이콘 자산 |
-| `update.go` | 버전 비교·사용자 요청 시 릴리스 조회 |
+| `update.go`, `auto_update.go`, `auto_update_*.go` | 정식 버전 조회·배포 파일 검증·Windows 교체 도우미와 복원 |
 
 systray는 프로세스당 아이콘 하나를 제공합니다. Windows는 여러 에이전트가 있으면 자신을 `-only <agent>`로 다시 실행합니다.
 상태 파일도 에이전트별로 나누고 상세 화면은 여러 프로세스의 정보를 합칩니다.
@@ -180,7 +182,7 @@ Claude·Codex 조회 경로는 비공개 API이며 로컬 기록으로 폴백할
 `/api/actions`의 refresh 응답은 예약한 작업 ID를 반환하고 `/api/status`는 같은 작업의
 `running`·`completed`·`waiting`·`failed`와 시각을 제공합니다. 최소 간격·backoff 대기는 실제 조회 완료와 구분합니다.
 `/api/meta`의 프로세스별 `instance_id`와 `ui_revision`을 페이지에 삽입한 값과 비교해 재로딩합니다.
-미저장 설정·자동 실행 변경이나 저장 작업이 있으면 재로딩을 보류합니다. 조회 조건은 브라우저 `localStorage`에
+설정은 각 변경을 즉시 저장하고 숫자 입력은 유효성 검사 후 지연 저장합니다. 조회 조건은 브라우저 `localStorage`에
 저장하며 OS 사용자 설정 파일과 별개이고 로컬 포트마다 저장 범위가 다릅니다.
 
 토큰 화면은 원시 증분 캐시에서 오늘을 포함한 7·14·30일을 다시 집계합니다. 모델·프로젝트는 정확히 일치하는
@@ -233,7 +235,7 @@ node scripts/render-tray-action-icons.cjs
 
 ## 버전과 CI
 
-로컬 빌드의 기본 버전은 `dev`이며 업데이트 버전 비교를 하지 않습니다. 버전은 `main.appVersion`에 링크합니다.
+로컬 빌드의 기본 버전은 `dev`이며 자동 업데이트를 건너뜁니다. 버전은 `main.appVersion`에 링크합니다.
 Windows는 `powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version v1.2.3`, macOS는 `VERSION=v1.2.3 bash ./build.sh`로 지정합니다.
 [build workflow](../.github/workflows/build.yml)는 `main` push, `v*` 태그 push, PR, 수동 실행을 받습니다.
 현재 개발 브랜치의 일반 push만으로 실행되는 설정은 아닙니다. CI는 Go `stable`을 사용하므로 툴체인·OS 요건을 함께 확인합니다.
@@ -243,3 +245,26 @@ Windows는 앱·vendor 테스트와 아이콘 생성 스모크, macOS는 앱 테
 Windows exe·zip과 macOS zip artifact는 7일 보관합니다. `v*` 태그에서는 Windows·macOS·정적 검사가 모두 성공한 뒤 별도 `release` job이 배포 파일과 제삼자 고지를 함께 게시합니다. 태그 빌드는 태그명을 버전으로 사용합니다.
 
 릴리스할 때는 `docs/releases/vX.Y.Z.md`에 해당 버전의 배포 안내를 작성해 main에 반영하고, 검증한 커밋에 `vX.Y.Z` 태그를 만들어 push합니다. 워크플로가 안내 파일과 배포 파일을 확인한 뒤 GitHub Release를 생성합니다. 이미 게시한 태그를 다른 커밋으로 이동하지 않습니다. 의존성·아이콘 라이선스가 바뀌면 `THIRD_PARTY_NOTICES.txt`도 갱신합니다. Windows zip과 macOS 앱 번들에는 이 고지가 포함됩니다.
+
+Windows 자동 업데이트 대상은 amd64 정식 빌드입니다. 시작 직후와 이후 6시간마다 지정 저장소의 최신 정식 릴리스를
+확인하며 초안·사전 릴리스는 설치 대상에서 제외합니다. 릴리스 태그와 저장소가 일치하는 HTTPS 주소,
+예상 배포 파일명, 파일 크기, `SHA256SUMS.txt`의 SHA-256을 검증한 뒤 별도 도우미에 교체를 넘깁니다.
+도우미는 기존 프로세스 종료·동일 위치 교체·재시작을 담당하고 실패 시 기존 실행 파일 복원을 시도합니다.
+실제 교체는 Windows 전용이며 macOS는 릴리스 링크를 통한 수동 교체만 지원합니다.
+
+`/api/auto-update`는 지원 여부·상태·오류와 `checked_at`·`next_check_at`을 제공합니다.
+조회 제한 시간은 메타데이터 10초, 다운로드 전체 3분이며 재시작 후 상태 확인은 최대 90초입니다.
+동일 설치의 교체가 겹치지 않도록 exe 옆의 고정 잠금·작업 폴더를 사용하므로 설치 폴더 쓰기 권한이 필요합니다.
+작업 폴더는 실행 파일 경로에서 계산한 `.usage-tray-update-<해시>`이며 그 안의 `update.lock`으로 조정합니다.
+조회 실패 시 다음 6시간 주기에 다시 확인합니다. 다음 확인 시각은 디스크에 저장하므로 앱 재시작도 이 대기를 유지합니다.
+서비스별 `-only`·`-discover` 실행 인자는 재시작 때 유지합니다.
+
+단일 `usage-tray.exe`와 `SHA256SUMS.txt`는 자동 업데이트의 입력이므로 릴리스에서 이름을 유지합니다.
+CI는 exe·두 zip·고지 파일의 해시를 생성하고 `sha256sum --check`로 검증한 뒤 함께 게시합니다.
+저장소 내용 쓰기 권한은 릴리스 게시 job에만 부여합니다. 같은 릴리스의 파일과 해시는 배포 무결성 확인에
+사용하며 별도 서명 키로 인증한 업데이트 메타데이터는 아닙니다. Windows 코드 서명과 Apple 공증은 수행하지 않습니다.
+로컬 회귀 검증과 CI 성공은 실제 설치 폴더 권한·보안 제품·여러 프로세스 교체의 실사용 검증을 대신하지 않습니다.
+
+현재 자동 업데이트는 exe만 교체하고 설치 폴더의 `THIRD_PARTY_NOTICES.txt`는 변경하지 않습니다.
+v0.3.0은 v0.2.0과 의존성·고지를 유지합니다. 이후 의존성이나 고지가 변경되는 릴리스는 새 고지를 포함한
+zip 재설치를 안내해야 하며, exe 자동 교체만으로 새 라이선스 고지가 배포된다고 가정하지 않습니다.

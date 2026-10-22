@@ -125,12 +125,21 @@ func appHTTPHandler() http.Handler {
 		switch r.Method {
 		case http.MethodGet:
 			writeJSON(w, s)
-		case http.MethodPut:
+		case http.MethodPut, http.MethodPatch:
 			if !allowMutation(w, r) {
 				return
 			}
 			theme := s.Theme
-			if !readJSON(w, r, &s) {
+			if r.Method == http.MethodPatch {
+				var patch map[string]json.RawMessage
+				if !readJSON(w, r, &patch) {
+					return
+				}
+				if err := applySettingsPatch(&s, patch); err != nil {
+					apiError(w, 400, err.Error())
+					return
+				}
+			} else if !readJSON(w, r, &s) {
 				return
 			}
 			// Theme changes are saved immediately through /api/theme. A stale
@@ -146,7 +155,7 @@ func appHTTPHandler() http.Handler {
 			}
 			writeJSON(w, s)
 		default:
-			apiError(w, 405, "GET 또는 PUT 요청만 지원합니다")
+			apiError(w, 405, "GET, PUT 또는 PATCH 요청만 지원합니다")
 		}
 	})
 	mux.HandleFunc("/api/theme", func(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +217,13 @@ func appHTTPHandler() http.Handler {
 			theme = "system"
 		}
 		writeJSON(w, map[string]string{"instance_id": dashboardInstanceID(), "version": appVersion, "ui_revision": dashboardUIRevision(), "theme": theme})
+	})
+	mux.HandleFunc("/api/auto-update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			apiError(w, 405, "GET 요청만 지원합니다")
+			return
+		}
+		writeJSON(w, currentAutomaticUpdateStatus())
 	})
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -359,6 +375,54 @@ func allowMutation(w http.ResponseWriter, r *http.Request) bool {
 		}
 	}
 	return true
+}
+
+// PATCH merges only supplied leaves while the settings transaction lock is held.
+// The current settings provide the schema, including every supported rule key.
+func applySettingsPatch(settings *traySettings, patch map[string]json.RawMessage) error {
+	if len(patch) == 0 {
+		return fmt.Errorf("변경할 설정이 없습니다")
+	}
+	if _, exists := patch["theme"]; exists {
+		return fmt.Errorf("테마는 테마 API로 변경해 주세요")
+	}
+	encoded, _ := json.Marshal(settings)
+	var current map[string]json.RawMessage
+	_ = json.Unmarshal(encoded, &current)
+	if err := mergeSettingsLeaves(current, patch); err != nil {
+		return err
+	}
+	encoded, _ = json.Marshal(current)
+	if err := json.Unmarshal(encoded, settings); err != nil {
+		return fmt.Errorf("설정 값의 형식이 올바르지 않습니다")
+	}
+	return validateTraySettings(*settings)
+}
+
+func mergeSettingsLeaves(current, patch map[string]json.RawMessage) error {
+	for key, value := range patch {
+		old, exists := current[key]
+		if !exists {
+			return fmt.Errorf("지원하지 않는 설정: %s", key)
+		}
+		if strings.TrimSpace(string(value)) == "null" {
+			return fmt.Errorf("설정 값이 비어 있습니다: %s", key)
+		}
+		if strings.HasPrefix(strings.TrimSpace(string(old)), "{") {
+			var existing, changes map[string]json.RawMessage
+			_ = json.Unmarshal(old, &existing)
+			if json.Unmarshal(value, &changes) != nil || len(changes) == 0 {
+				return fmt.Errorf("설정 값의 형식이 올바르지 않습니다: %s", key)
+			}
+			if err := mergeSettingsLeaves(existing, changes); err != nil {
+				return err
+			}
+			current[key], _ = json.Marshal(existing)
+		} else {
+			current[key] = value
+		}
+	}
+	return nil
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

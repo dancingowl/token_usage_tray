@@ -38,3 +38,16 @@ func TestThemeMenuIsSharedByEveryPageAndOutsideSettingsForm(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsHaveAutomaticFeedbackWithoutManualSaveOrUnloadWarning(t *testing.T) {
+	for _, removed := range []string{`id="save-settings"`, `id="reset-settings"`, "beforeunload", "저장하지 않은 변경사항"} {
+		if strings.Contains(dashboardHTML+dashboardJS, removed) {
+			t.Errorf("obsolete manual settings flow remains: %s", removed)
+		}
+	}
+	for _, required := range []string{`id="retry-settings"`, `id="settings-message"`, `aria-live="polite"`, `id="auto-update-state"`} {
+		if !strings.Contains(dashboardHTML, required) {
+			t.Errorf("automatic settings feedback missing: %s", required)
+		}
+	}
+}

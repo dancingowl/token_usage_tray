@@ -80,11 +80,11 @@ const dashboardHTML = `
     <div class="settings-row"><label class="settings-label" for="startup-enabled">로그인 시 실행</label><div class="settings-control"><button type="button" id="retry-startup" class="settings-compact" hidden>다시 확인</button><input id="startup-enabled" class="settings-switch" type="checkbox" role="switch" aria-describedby="startup-state" disabled></div><p id="startup-state" class="dash-note" role="status">자동 실행 상태를 확인하고 있습니다.</p></div>
     <div class="settings-row"><label class="settings-label" for="poll-minutes">수집 간격</label><div class="settings-control"><input id="poll-minutes" name="poll_minutes" type="number" min="1" max="60" step="any" inputmode="decimal" required aria-describedby="poll-help">분</div><p class="dash-note" id="poll-help">1~60분 · 최소 조회 간격: Claude 3분, Codex·Antigravity 2분</p></div>
    </section>
-  </fieldset><div class="settings-footer"><p id="settings-message" class="dash-message" role="status" aria-live="polite">설정을 불러오고 있습니다.</p><div class="dash-actions"><button type="button" id="reset-settings" disabled>변경 취소</button><button type="submit" class="primary" id="save-settings" disabled>저장</button></div></div></form>
+  </fieldset><div class="settings-footer"><p id="settings-message" class="dash-message" role="status" aria-live="polite">설정을 불러오고 있습니다.</p><button type="button" id="retry-settings" class="settings-compact" hidden>실패한 변경 다시 시도</button></div></form>
  </div></section>
  <section id="system-details" class="panel page-section dashboard-full settings-info" aria-labelledby="system-title"><h2 id="system-title">앱 정보</h2><div class="dash-grid">
   <section aria-labelledby="status-title"><h2 id="status-title">연결 상태</h2><div id="agent-status"><p class="none">상태를 확인하고 있습니다.</p></div><p id="activity-state" class="dash-note"></p><p id="status-message" class="dash-message" role="status"></p></section>
-  <section aria-labelledby="update-title"><h2 id="update-title">버전</h2><p id="update-state" class="dash-note">현재 버전 {{APP_VERSION}}</p><div class="dash-actions"><a class="button" id="release-link" href="{{RELEASES_URL}}" target="_blank" rel="noopener noreferrer">릴리스 보기<span aria-hidden="true">↗</span></a></div></section>
+  <section aria-labelledby="update-title"><h2 id="update-title">버전</h2><p id="update-state" class="dash-note">현재 버전 {{APP_VERSION}}</p><p id="auto-update-state" class="dash-note" role="status" aria-live="polite">자동 업데이트 상태를 확인하고 있습니다.</p><div class="dash-actions"><a class="button" id="release-link" href="{{RELEASES_URL}}" target="_blank" rel="noopener noreferrer">릴리스 보기<span aria-hidden="true">↗</span></a></div></section>
  </div></section>
 </div>
 `
@@ -109,8 +109,9 @@ function migrateLegacyLink() {
  if(target)location.replace(target);
 }
 migrateLegacyLink();window.addEventListener('hashchange',migrateLegacyLink);
-let settingsDirty=false, startupDirty=false;
-let draftPausedUntil=0,metadataBusy=false,reloadPending=false,refreshWatcher=0;
+const settingsQueue=new Map(),failedSettings=new Map(),numberTimers=new Map(),settingVersions=new Map(),settingSignatures=new Map();
+let settingsSaving=false,settingsApplied=false;
+let pausedUntil=0,metadataBusy=false,reloadPending=false,refreshWatcher=0;
 let themePreference=window.getUsageTrayTheme?window.getUsageTrayTheme():'system',themeBusy=false,themeRequest=0;
 const initialInstance=document.querySelector('meta[name="usage-tray-instance"]')?.content || '';
 const initialUI=document.querySelector('meta[name="usage-tray-ui"]')?.content || '';
@@ -124,22 +125,19 @@ function restoreHistoryView(){
  if([1,7,30].includes(saved.days))$('history-days').value=String(saved.days);if(typeof saved.zoom==='boolean')historyZoom=saved.zoom;
 }
 restoreHistoryView();
-function showReloadNotice(text){$('app-update-message').textContent=text;$('app-update-banner').hidden=false;$('reload-app').disabled=settingsDirty || startupDirty || settingsBusy || mutationCount>0;}
+function showReloadNotice(text){$('app-update-message').textContent=text;$('app-update-banner').hidden=false;$('reload-app').disabled=hasPendingSettings() || settingsBusy || mutationCount>0;}
 async function checkAppMetadata(){
  if(metadataBusy || document.hidden)return;metadataBusy=true;const themeAtStart=themeRequest;
  try{
   const data=await api('/api/meta');
   if(!data || typeof data.instance_id!=='string' || typeof data.ui_revision!=='string')return;
   if(!knownInstance){knownInstance=data.instance_id;knownUI=data.ui_revision;}
-  if(data.instance_id!==knownInstance || data.ui_revision!==knownUI){reloadPending=true;if(settingsDirty || startupDirty || settingsBusy || mutationCount)showReloadNotice('앱이 업데이트되었습니다. 편집 중인 설정을 저장하거나 취소한 뒤 화면을 갱신해 주세요.');else location.reload();}
+  if(data.instance_id!==knownInstance || data.ui_revision!==knownUI){reloadPending=true;if(hasPendingSettings() || settingsBusy || mutationCount)showReloadNotice('앱이 업데이트되었습니다. 설정 반영이 끝나면 화면을 갱신해 주세요.');else location.reload();}
   if(!themeBusy && themeAtStart===themeRequest)adoptTheme(data.theme || 'system');
  }catch(e){/* A restart temporarily closes the local server; retry on the next poll. */}
  finally{metadataBusy=false;}
 }
-$('reload-app').addEventListener('click',()=>{if(!settingsDirty && !startupDirty && !settingsBusy && !mutationCount)location.reload();});
-window.addEventListener('beforeunload',event=>{
- if(settingsDirty || startupDirty) { event.preventDefault();event.returnValue=''; }
-});
+$('reload-app').addEventListener('click',()=>{if(!hasPendingSettings() && !settingsBusy && !mutationCount)location.reload();});
 function message(id, text, error) { const e=$(id); e.textContent=text; e.classList.toggle('error',!!error); }
 function textNode(tag, text, className) { const e=document.createElement(tag); e.textContent=text; if(className)e.className=className; return e; }
 const tokenTooltip=textNode('div','','token-tooltip');tokenTooltip.id='token-tooltip';tokenTooltip.setAttribute('role','tooltip');tokenTooltip.hidden=true;document.body.append(tokenTooltip);
@@ -185,14 +183,14 @@ const themeLabels={system:'시스템 설정',light:'밝게',dark:'어둡게'};
 const themeChoices=Array.from(document.querySelectorAll('[data-theme-choice]'));
 function renderThemeControl(){
  const selected=themeChoices.find(button=>button.dataset.themeChoice===themePreference),trigger=$('theme-toggle');
- trigger.replaceChildren(selected.querySelector('svg').cloneNode(true));trigger.setAttribute('aria-label','테마: '+themeLabels[themePreference]);trigger.title='테마: '+themeLabels[themePreference];trigger.disabled=themeBusy || settingsBusy;
- for(const choice of themeChoices){choice.setAttribute('aria-checked',String(choice.dataset.themeChoice===themePreference));choice.disabled=themeBusy || settingsBusy;}
+ trigger.replaceChildren(selected.querySelector('svg').cloneNode(true));trigger.setAttribute('aria-label','테마: '+themeLabels[themePreference]);trigger.title='테마: '+themeLabels[themePreference];trigger.disabled=themeBusy;
+ for(const choice of themeChoices){choice.setAttribute('aria-checked',String(choice.dataset.themeChoice===themePreference));choice.disabled=themeBusy;}
 }
 function adoptTheme(value){themePreference=Object.prototype.hasOwnProperty.call(themeLabels,value)?value:'system';if(window.applyUsageTrayTheme)window.applyUsageTrayTheme(themePreference);renderThemeControl();}
 function closeThemeMenu(restoreFocus=false){$('theme-menu').hidden=true;$('theme-toggle').setAttribute('aria-expanded','false');if(restoreFocus)$('theme-toggle').focus();}
-function openThemeMenu(last=false){if(themeBusy || settingsBusy)return;$('theme-menu').hidden=false;$('theme-toggle').setAttribute('aria-expanded','true');(last?themeChoices[themeChoices.length-1]:themeChoices.find(button=>button.dataset.themeChoice===themePreference)).focus();}
+function openThemeMenu(last=false){if(themeBusy)return;$('theme-menu').hidden=false;$('theme-toggle').setAttribute('aria-expanded','true');(last?themeChoices[themeChoices.length-1]:themeChoices.find(button=>button.dataset.themeChoice===themePreference)).focus();}
 async function saveTheme(value){
- if(themeBusy || settingsBusy)return;closeThemeMenu(true);if(value===themePreference)return;
+ if(themeBusy)return;closeThemeMenu(true);if(value===themePreference)return;
  themeBusy=true;const request=++themeRequest;mutationCount++;renderThemeControl();
  try{
   const result=await api('/api/theme','PUT',{theme:value});
@@ -217,7 +215,7 @@ window.addEventListener('usage-tray-theme-change',()=>{themeRequest++;themePrefe
 renderThemeControl();
 async function api(path, method, body) {
  const options={cache:'no-store',headers:{'Accept':'application/json'}};
- if(method) { options.method=method; options.headers['X-Usage-Tray']='1'; options.headers['Content-Type']='application/json'; if(body!==undefined)options.body=JSON.stringify(body); }
+ if(method) { options.method=method; options.keepalive=true; options.headers['X-Usage-Tray']='1'; options.headers['Content-Type']='application/json'; if(body!==undefined)options.body=JSON.stringify(body); }
  const res=await fetch(path,options);
  if(!res.ok) throw new Error(res.status===400 ? '입력값을 확인해 주세요.' : '요청을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.');
  return res.json();
@@ -249,69 +247,118 @@ function arrangeAlertRules() {
  }
 }
 async function loadSettingsContext(){try{settingsAgentState=await api('/state.json');arrangeAlertRules();}catch(e){/* Keep all editable rules available when connection status is unknown. */}}
-function readSettings(){
- const settings={icon_style:field('icon_style').value,display_window:field('display_window').value,poll_seconds:Math.round(Number(field('poll_minutes').value)*60),visible_agents:{},alerts_enabled:field('alerts_enabled').checked,notify_limits:field('notify_limits').checked,alerts_paused_until:draftPausedUntil,alert_rules:{}};
- for(const key of Object.keys(names))settings.visible_agents[key]=field('visible_'+key).checked;
- for(const key of Object.keys(ruleNames))settings.alert_rules[key]={enabled:field(key+'_enabled').checked,threshold:Number(field(key+'_threshold').value),recovery:field(key+'_recovery').checked};
- return settings;
-}
-function settingsKey(settings){
- return JSON.stringify([settings.icon_style,settings.display_window,settings.poll_seconds,settings.alerts_paused_until || 0,Object.keys(names).map(key=>!!settings.visible_agents[key]),!!settings.alerts_enabled,!!settings.notify_limits,Object.keys(ruleNames).map(key=>{const r=settings.alert_rules[key];return [!!r.enabled,r.threshold,!!r.recovery];})]);
-}
 function fillSettings(settings) {
  savedSettings=settings;for(const radio of form.querySelectorAll('[name="icon_style"]'))radio.checked=radio.value===settings.icon_style;
  field('display_window').value=settings.display_window;field('poll_minutes').value=settings.poll_seconds/60;
- draftPausedUntil=settings.alerts_paused_until || 0;const paused=draftPausedUntil>Date.now()/1000;field('alert_pause').querySelector('[value="until"]').hidden=!paused;field('alert_pause').value=paused?'until':'none';renderPauseState();
+ pausedUntil=settings.alerts_paused_until || 0;const paused=pausedUntil>Date.now()/1000;field('alert_pause').querySelector('[value="until"]').hidden=!paused;field('alert_pause').value=paused?'until':'none';renderPauseState();
  for(const key of Object.keys(names))setChecked('visible_'+key,settings.visible_agents[key]);
  setChecked('alerts_enabled',settings.alerts_enabled);setChecked('notify_limits',settings.notify_limits);drawRules(settings);
 }
+function hasPendingSettings(){return settingsSaving || settingsQueue.size>0 || numberTimers.size>0;}
 function updateSettingsControls(){
- settingsDirty=!!savedSettings && settingsKey(readSettings())!==settingsKey(savedSettings);
- startupDirty=!!(savedStartup && savedStartup.supported && $('startup-enabled').checked!==savedStartup.enabled);
- const dirty=settingsDirty || startupDirty;
- $('settings-fields').disabled=settingsBusy || !savedSettings;form.setAttribute('aria-busy',String(settingsBusy));
- renderThemeControl();
- $('startup-enabled').disabled=settingsBusy || startupLoading || !savedStartup || !savedStartup.supported;
- $('retry-startup').disabled=settingsBusy || startupLoading;
- $('save-settings').disabled=settingsBusy || !savedSettings || !dirty;$('reset-settings').disabled=settingsBusy || !dirty;
+ $('settings-fields').disabled=!savedSettings;form.setAttribute('aria-busy',String(hasPendingSettings()));
+ $('startup-enabled').disabled=startupLoading || !savedStartup || !savedStartup.supported;
+ $('retry-startup').disabled=startupLoading;
  $('notification-options').hidden=!field('alerts_enabled').checked && !form.querySelector('#notification-options :invalid');
  for(const row of form.querySelectorAll('.alert-rule'))row.classList.toggle('rule-off',!field(row.dataset.rule+'_enabled').checked);
- if(reloadPending)showReloadNotice(settingsDirty || startupDirty?'앱이 업데이트되었습니다. 변경사항을 저장하거나 취소한 뒤 화면을 갱신해 주세요.':'앱이 업데이트되었습니다. 화면을 갱신해 주세요.');
+ $('retry-settings').hidden=failedSettings.size===0;
+ if(reloadPending)showReloadNotice(hasPendingSettings()?'앱이 업데이트되었습니다. 설정 반영이 끝나면 화면을 갱신해 주세요.':'앱이 업데이트되었습니다. 화면을 갱신해 주세요.');
 }
-function renderPauseState(){const paused=draftPausedUntil>Date.now()/1000;$('alert-pause-state').hidden=!paused;$('alert-pause-state').textContent=paused?new Date(draftPausedUntil*1000).toLocaleString('ko-KR')+'까지 중지한 뒤 자동으로 알림을 재개합니다.':'';}
-field('alert_pause').addEventListener('change',()=>{const value=field('alert_pause').value;if(value==='none')draftPausedUntil=0;else if(value==='hour')draftPausedUntil=Math.floor(Date.now()/1000)+3600;else if(value==='today'){const end=new Date();end.setHours(24,0,0,0);draftPausedUntil=Math.floor(end.getTime()/1000);}renderPauseState();});
-function setSettingsBusy(busy) {
- settingsBusy=busy;updateSettingsControls();
+function settingsStatus(){
+ const invalid=form.querySelector('input:invalid');
+ if(failedSettings.size)message('settings-message','일부 변경을 반영하지 못했습니다. 실패한 변경을 다시 시도해 주세요.',true);
+ else if(invalid)message('settings-message','입력 범위를 확인해 주세요. 올바른 숫자를 입력하면 자동으로 반영합니다.',true);
+ else message('settings-message',hasPendingSettings()?'변경사항을 반영하고 있습니다.':settingsApplied?'변경사항을 저장·반영했습니다.':'변경사항은 자동으로 저장·반영됩니다.');
+ updateSettingsControls();
 }
-async function loadSettings() {
- if(settingsBusy)return;setSettingsBusy(true);message('settings-message','설정을 불러오고 있습니다.');
- try { fillSettings(await api('/api/settings'));message('settings-message','변경사항이 없습니다.'); }
- catch(e) { message('settings-message','설정을 불러오지 못했습니다. 페이지를 다시 열어 주세요.',true); }
- finally { setSettingsBusy(false); }
+function renderPauseState(){const paused=pausedUntil>Date.now()/1000;$('alert-pause-state').hidden=!paused;$('alert-pause-state').textContent=paused?new Date(pausedUntil*1000).toLocaleString('ko-KR')+'까지 중지한 뒤 자동으로 알림을 재개합니다.':'';}
+function settingPatch(input){
+ const name=input.name;
+ if(input.id==='startup-enabled')return {key:'startup',patch:{enabled:input.checked}};
+ if(name==='poll_minutes')return {key:'poll_seconds',patch:{poll_seconds:Math.round(Number(input.value)*60)}};
+ if(name.startsWith('visible_')){const agent=name.slice(8);return {key:'visible_agents.'+agent,patch:{visible_agents:{[agent]:input.checked}}};}
+ for(const key of Object.keys(ruleNames))if(name.startsWith(key+'_')){const prop=name.slice(key.length+1);return {key:'alert_rules.'+key+'.'+prop,patch:{alert_rules:{[key]:{[prop]:prop==='threshold'?Number(input.value):input.checked}}}};}
+ if(name==='alert_pause'){
+  if(input.value==='none')pausedUntil=0;else if(input.value==='hour')pausedUntil=Math.floor(Date.now()/1000)+3600;else if(input.value==='today'){const end=new Date();end.setHours(24,0,0,0);pausedUntil=Math.floor(end.getTime()/1000);}
+  renderPauseState();return {key:'alerts_paused_until',patch:{alerts_paused_until:pausedUntil}};
+ }
+ if(['icon_style','display_window','alerts_enabled','notify_limits'].includes(name))return {key:name,patch:{[name]:input.type==='checkbox'?input.checked:input.value}};
+ return null;
 }
-function settingsInput(){if(settingsBusy || !savedSettings)return;updateSettingsControls();message('settings-message',settingsDirty || startupDirty?'저장하지 않은 변경사항이 있습니다.':'변경사항이 없습니다.');}
+function queueSetting(action){
+ const signature=JSON.stringify(action.patch);if(settingSignatures.get(action.key)===signature && !failedSettings.has(action.key)){settingsStatus();return;}settingSignatures.set(action.key,signature);
+ action.version=(settingVersions.get(action.key)||0)+1;settingVersions.set(action.key,action.version);
+ failedSettings.delete(action.key);settingsQueue.set(action.key,action);settingsStatus();drainSettings();
+}
+async function drainSettings(){
+ if(settingsSaving)return;settingsSaving=true;mutationCount++;settingsStatus();
+ try{while(settingsQueue.size){
+  const [key,action]=settingsQueue.entries().next().value;settingsQueue.delete(key);
+  try{
+   if(key==='startup'){
+    const result=await api('/api/startup','POST',action.patch);
+    if(!result || !result.supported || result.enabled!==action.patch.enabled)throw new Error('startup state mismatch');
+    savedStartup={enabled:result.enabled,supported:result.supported};$('startup-state').hidden=true;
+   }else savedSettings=await api('/api/settings','PATCH',action.patch);
+   settingsApplied=true;if(settingVersions.get(key)===action.version)failedSettings.delete(key);
+  }catch(e){if(settingVersions.get(key)===action.version)failedSettings.set(key,action);}
+  settingsStatus();
+ }}finally{settingsSaving=false;mutationCount--;settingsStatus();}
+}
+function settingsInput(event){
+ const input=event.target;if(!savedSettings || !(input instanceof HTMLInputElement || input instanceof HTMLSelectElement))return;
+ if(input.type==='number'){
+  clearTimeout(numberTimers.get(input.name));numberTimers.delete(input.name);
+  const action=settingPatch(input);if(!action)return;
+  // An invalid edit supersedes a queued earlier number, but never reaches the API.
+  if(!input.checkValidity() || !input.value.trim()){
+   settingsQueue.delete(action.key);failedSettings.delete(action.key);settingSignatures.delete(action.key);settingVersions.set(action.key,(settingVersions.get(action.key)||0)+1);
+   input.setAttribute('aria-invalid','true');settingsStatus();return;
+  }
+  input.removeAttribute('aria-invalid');
+  if(event.type==='input'){numberTimers.set(input.name,setTimeout(()=>{numberTimers.delete(input.name);queueSetting(settingPatch(input));},350));settingsStatus();}
+  else queueSetting(action);
+ }else if(event.type==='change'){const action=settingPatch(input);if(action)queueSetting(action);}
+}
 form.addEventListener('input',settingsInput);form.addEventListener('change',settingsInput);
-form.addEventListener('submit',async e=>{
- e.preventDefault();if(settingsBusy || !savedSettings)return;updateSettingsControls();if(!settingsDirty && !startupDirty)return;
- const invalid=form.querySelector('input:invalid,select:invalid');if(invalid){for(let parent=invalid.parentElement;parent && parent!==form;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true;if(parent.id==='notification-options')parent.hidden=false;}invalid.reportValidity();return;}
- const settings=readSettings(),startupEnabled=$('startup-enabled').checked,saveApp=settingsDirty,saveStartup=startupDirty,applied=[],failed=[];
- setSettingsBusy(true);mutationCount++;message('settings-message','설정을 저장하고 있습니다.');
- try{
-  if(saveApp){try{const result=await api('/api/settings','PUT',settings);fillSettings(result);applied.push('앱 설정');}catch(err){failed.push('앱 설정');}}
-  if(saveStartup){try{const result=await api('/api/startup','POST',{enabled:startupEnabled});renderStartup(result,!!result.supported && result.enabled!==startupEnabled);if(result.supported && result.enabled===startupEnabled)applied.push('자동 실행');else failed.push('자동 실행');}catch(err){failed.push('자동 실행');}}
-  if(failed.length)message('settings-message',(applied.length?applied.join('·')+'은 저장했습니다. ':'')+failed.join('·')+' 저장에 실패했습니다. 변경사항을 확인하고 다시 저장해 주세요.',true);
-  else message('settings-message','설정을 저장했습니다.');
- }finally{setSettingsBusy(false);mutationCount--;}
+form.addEventListener('focusout',event=>{if(event.target.type==='number'){settingsInput({target:event.target,type:'change'});if(!event.target.checkValidity())event.target.reportValidity();}});
+form.addEventListener('submit',event=>event.preventDefault());
+function flushNumberChanges(){for(const name of Array.from(numberTimers.keys()))settingsInput({target:field(name),type:'change'});}
+document.addEventListener('click',async event=>{
+ const link=event.target.closest && event.target.closest('a[href]');
+ if(!link || event.defaultPrevented || event.button!==0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || link.target==='_blank')return;
+ const url=new URL(link.href,location.href);if(url.origin!==location.origin)return;
+ flushNumberChanges();if(!hasPendingSettings())return;event.preventDefault();
+ while(hasPendingSettings())await new Promise(resolve=>setTimeout(resolve,20));
+ location.assign(url.href);
 });
-$('reset-settings').addEventListener('click',()=>{if(settingsBusy)return;if(savedSettings)fillSettings(savedSettings);if(savedStartup)renderStartup(savedStartup);updateSettingsControls();message('settings-message','변경사항을 취소했습니다.');});
-function renderStartup(data,preserveInput=false) {
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushNumberChanges();});
+// Teardown flushes valid numbers through the same queue. Each started request
+// uses keepalive; never bypass serialization with a second closing request.
+function flushClosingSettings(){flushNumberChanges();}
+window.addEventListener('pagehide',flushClosingSettings);
+$('retry-settings').addEventListener('click',()=>{for(const action of Array.from(failedSettings.values()))queueSetting({...action});});
+async function loadSettings(){
+ if(settingsBusy)return;settingsBusy=true;message('settings-message','설정을 불러오고 있습니다.');
+ try{fillSettings(await api('/api/settings'));settingsStatus();}
+ catch(e){message('settings-message','설정을 불러오지 못했습니다. 페이지를 다시 열어 주세요.',true);}
+ finally{settingsBusy=false;updateSettingsControls();}
+}
+function renderStartup(data){
  if(typeof data.enabled!=='boolean' || typeof data.supported!=='boolean')throw new Error('invalid startup state');
- savedStartup={enabled:data.enabled,supported:data.supported};
- if(!preserveInput)$('startup-enabled').checked=data.enabled;
+ savedStartup={enabled:data.enabled,supported:data.supported};$('startup-enabled').checked=data.enabled;
  $('startup-state').textContent=data.supported?'':'이 운영체제에서는 자동 실행 설정을 지원하지 않습니다.';$('startup-state').hidden=!!data.supported;$('retry-startup').hidden=true;
 }
-async function loadStartup(){if(startupLoading || settingsBusy && savedSettings)return;startupLoading=true;updateSettingsControls();try{renderStartup(await api('/api/startup'));}catch(e){$('startup-state').hidden=false;$('startup-state').textContent='자동 실행 상태를 불러오지 못했습니다.';$('retry-startup').hidden=false;}finally{startupLoading=false;updateSettingsControls();}}
+async function loadStartup(){if(startupLoading)return;startupLoading=true;updateSettingsControls();try{renderStartup(await api('/api/startup'));}catch(e){$('startup-state').hidden=false;$('startup-state').textContent='자동 실행 상태를 불러오지 못했습니다.';$('retry-startup').hidden=false;}finally{startupLoading=false;updateSettingsControls();}}
 $('retry-startup').addEventListener('click',loadStartup);
+async function loadAutomaticUpdateStatus(){
+ try{
+  const data=await api('/api/auto-update'),labels={idle:'자동 업데이트 대기 중',checking:'새 버전 확인 중',downloading:'업데이트 다운로드 중',installing:'업데이트 적용 중',error:'자동 업데이트 실패',disabled:'자동 업데이트 사용 안 함'};
+  const checked=data.checked_at && !data.checked_at.startsWith('0001-'),next=data.next_check_at && !data.next_check_at.startsWith('0001-');
+  const text=!data.supported?'이 실행 환경에서는 자동 업데이트를 지원하지 않습니다. 릴리스에서 최신 버전을 확인해 주세요.':(labels[data.state] || '자동 업데이트 상태 확인 중')+(data.version?' · '+data.version:'')+(checked?' · 최근 확인 '+timeLabel(data.checked_at):'')+(data.error?' · '+data.error:'')+(next?' · 다음 확인 '+timeLabel(data.next_check_at):'');
+  message('auto-update-state',text,data.state==='error');
+ }catch(e){message('auto-update-state','자동 업데이트 상태를 확인하지 못했습니다. 잠시 후 다시 확인합니다.',true);}
+}
 async function loadStatus() {
  try {
   const data=await api('/api/status'), container=$('agent-status');container.replaceChildren();
@@ -575,7 +622,7 @@ async function refreshSnapshots() {
 }
 async function poll() {
  if(polling || document.hidden || mutationCount)return;polling=true;
- try { await Promise.all([page==='settings'?loadStatus():Promise.resolve(),page==='usage' && !compact?loadHistory():Promise.resolve(),refreshSnapshots()]); }
+ try { await Promise.all([page==='settings'?Promise.all([loadStatus(),loadAutomaticUpdateStatus()]):Promise.resolve(),page==='usage' && !compact?loadHistory():Promise.resolve(),refreshSnapshots()]); }
  catch(e) { message(page==='settings'?'status-message':'action-message','화면 자동 갱신을 완료하지 못했습니다. 앱 연결을 확인해 주세요.',true); }
  finally { polling=false; }
 }
@@ -590,7 +637,7 @@ if(page==='tokens' && tokenForm){
  storageWrite('usage-tray-token-view',options);
  tokenForm.addEventListener('change',()=>{storageWrite('usage-tray-token-view',{days:$('token-days').value,model:$('token-model').value,project:$('token-project').value,all:$('token-all').checked});tokenForm.requestSubmit();});
 }
-if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);checkAppMetadata();setInterval(checkAppMetadata,10000);setInterval(renderPauseState,30000);
+if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();loadAutomaticUpdateStatus();}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);checkAppMetadata();setInterval(checkAppMetadata,10000);setInterval(renderPauseState,30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAppMetadata();poll();}});
 })();
 `
