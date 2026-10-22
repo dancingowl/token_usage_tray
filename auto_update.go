@@ -246,8 +246,28 @@ func verifyAssetDigest(b []byte, digest string) error {
 	return nil
 }
 func updateWorkDir(exe string) string {
+	// Windows may report the same file using either an 8.3 alias or its long
+	// name. Every process must hash the physical executable's canonical path.
+	if canonical, err := canonicalUpdatePath(exe); err == nil {
+		exe = canonical
+	}
 	h := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(exe))))
 	return filepath.Join(filepath.Dir(exe), ".usage-tray-update-"+hex.EncodeToString(h[:8]))
+}
+func canonicalUpdatePath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(abs)
+}
+func sameUpdatePath(a, b string) bool {
+	a, err := canonicalUpdatePath(a)
+	if err != nil {
+		return false
+	}
+	b, err = canonicalUpdatePath(b)
+	return err == nil && strings.EqualFold(a, b)
 }
 func fileSHA256(path string) (string, error) {
 	f, err := os.Open(path)

@@ -166,6 +166,7 @@ if handleAutomaticUpdateMode(){return}
 for i:=1;i<len(os.Args);i++{if os.Args[i]=="-only" && i+1<len(os.Args){fixtureRole=os.Args[i+1];i++}}
 exe,_:=canonicalUpdateExecutable();dir:=updateWorkDir(exe);os.MkdirAll(dir,0700)
 mode,_:=os.ReadFile(filepath.Join(filepath.Dir(exe),"failure-mode"))
+if string(mode)=="registration-failure"{for{time.Sleep(time.Second)}}
 if appVersion=="v2.0.0" && string(mode)=="early-exit"{return}
 if appVersion=="v2.0.0" && string(mode)=="early-hang"{for{time.Sleep(time.Second)}}
 created,_:=processCreated(windows.CurrentProcess());p:=updateParticipant{PID:uint32(os.Getpid()),Created:created,Role:fixtureRole}
@@ -221,14 +222,43 @@ func waitAutomaticFixture(t *testing.T, target string, count int) []updateProces
 		time.Sleep(30 * time.Millisecond)
 	}
 }
+func shortAutomaticFixturePath(t *testing.T, path string) string {
+	t.Helper()
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]uint16, 32768)
+	n, err := windows.GetShortPathName(p, &buf[0], uint32(len(buf)))
+	if err != nil || n == 0 || n >= uint32(len(buf)) {
+		t.Fatalf("GetShortPathName: %v", err)
+	}
+	short := windows.UTF16ToString(buf[:n])
+	if strings.EqualFold(short, path) {
+		t.Fatalf("8.3 regression requires an actual short-path alias: %s", path)
+	}
+	return short
+}
 func TestAutomaticHelperRealWindowsLifecycle(t *testing.T) {
 	old, new := buildAutomaticFixture(t)
-	for _, mode := range []string{"success", "early-exit", "early-hang", "health-crash", "corrupt-candidate"} {
+	for _, mode := range []string{"success", "early-exit", "early-hang", "health-crash", "corrupt-candidate", "short-path-success", "short-path-early-hang", "registration-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
-			target := filepath.Join(dir, "fixture.exe")
+			target := filepath.Join(dir, "Usage Tray Fixture.exe")
 			if err := copyUpdateFile(old, target); err != nil {
 				t.Fatal(err)
+			}
+			target, err := canonicalUpdatePath(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			launchTarget := target
+			shortMode := strings.HasPrefix(mode, "short-path-")
+			if shortMode {
+				launchTarget = shortAutomaticFixturePath(t, target)
+				if updateWorkDir(launchTarget) != updateWorkDir(target) {
+					t.Fatal("short and long paths use different update locks")
+				}
 			}
 			work := updateWorkDir(target)
 			os.MkdirAll(work, 0700)
@@ -236,8 +266,16 @@ func TestAutomaticHelperRealWindowsLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			os.WriteFile(filepath.Join(dir, "failure-mode"), []byte(mode), 0600)
+			actualMode := strings.TrimPrefix(mode, "short-path-")
+			os.WriteFile(filepath.Join(dir, "failure-mode"), []byte(actualMode), 0600)
+			var owned []*exec.Cmd
 			t.Cleanup(func() {
+				// Retain the actual process handles: registration can fail before
+				// the first successful lookup, including on short-path CI runners.
+				for _, cmd := range owned {
+					_ = cmd.Process.Kill()
+					_ = cmd.Wait()
+				}
 				ps, _ := runningUpdateProcesses(target, work)
 				for _, p := range ps {
 					windows.TerminateProcess(p.handle, 1)
@@ -246,11 +284,22 @@ func TestAutomaticHelperRealWindowsLifecycle(t *testing.T) {
 				closeUpdateProcesses(ps)
 			})
 			for _, role := range []string{"claude", "codex"} {
-				cmd := exec.Command(target, "-only", role)
+				cmd := exec.Command(launchTarget, "-only", role)
 				if err := cmd.Start(); err != nil {
 					t.Fatal(err)
 				}
-				cmd.Process.Release()
+				owned = append(owned, cmd)
+			}
+			if actualMode == "registration-failure" {
+				time.Sleep(200 * time.Millisecond)
+				ps, err := runningUpdateProcesses(target, work)
+				closeUpdateProcesses(ps)
+				if err == nil {
+					t.Fatal("unregistered fixture unexpectedly passed process inspection")
+				}
+				// Cleanup must use the retained handles even though inspection
+				// cannot return either child. TempDir removal checks for leaks.
+				return
 			}
 			ps := waitAutomaticFixture(t, target, 2)
 			closeUpdateProcesses(ps)
@@ -258,23 +307,30 @@ func TestAutomaticHelperRealWindowsLifecycle(t *testing.T) {
 			copyUpdateFile(new, filepath.Join(session, "candidate.exe"))
 			oh, _ := fileSHA256(old)
 			nh, _ := fileSHA256(new)
-			tx := updateTransaction{Target: target, OldHash: oh, NewHash: nh, Version: "v2.0.0", Token: strings.Repeat("a", 64)}
+			tx := updateTransaction{Target: launchTarget, OldHash: oh, NewHash: nh, Version: "v2.0.0", Token: strings.Repeat("a", 64)}
 			if err := writeUpdateJSON(filepath.Join(session, "transaction.json"), tx); err != nil {
 				t.Fatal(err)
 			}
 			if mode == "corrupt-candidate" {
 				os.WriteFile(filepath.Join(session, "candidate.exe"), []byte("incomplete download"), 0600)
 			}
-			helper := exec.Command(filepath.Join(session, "updater.exe"), updateHelperFlag, filepath.Join(session, "transaction.json"), tx.Token)
+			helperPath, manifestPath := filepath.Join(session, "updater.exe"), filepath.Join(session, "transaction.json")
+			if shortMode {
+				helperPath = shortAutomaticFixturePath(t, helperPath)
+				manifestPath = shortAutomaticFixturePath(t, manifestPath)
+			}
+			helper := exec.Command(helperPath, updateHelperFlag, manifestPath, tx.Token)
 			if err := helper.Start(); err != nil {
 				t.Fatal(err)
 			}
+			owned = append(owned, helper)
 			var contender *exec.Cmd
-			if mode == "success" {
+			if actualMode == "success" {
 				contender = exec.Command(filepath.Join(session, "updater.exe"), updateHelperFlag, filepath.Join(session, "transaction.json"), tx.Token)
 				if err := contender.Start(); err != nil {
 					t.Fatal(err)
 				}
+				owned = append(owned, contender)
 			}
 			if err := helper.Wait(); err != nil {
 				t.Fatalf("helper: %v", err)
@@ -292,7 +348,7 @@ func TestAutomaticHelperRealWindowsLifecycle(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := oh
-			if mode == "success" {
+			if actualMode == "success" {
 				want = nh
 			}
 			if got != want {
@@ -307,7 +363,7 @@ func TestAutomaticHelperRealWindowsLifecycle(t *testing.T) {
 			if !roles["claude"] || !roles["codex"] {
 				t.Fatal("sibling roles not preserved")
 			}
-			if mode == "success" {
+			if actualMode == "success" {
 				if h, _ := fileSHA256(filepath.Join(session, "previous.exe")); h != oh {
 					t.Fatal("previous binary not preserved")
 				}

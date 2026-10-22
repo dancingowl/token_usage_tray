@@ -63,11 +63,11 @@ func automaticUpdateRestart() bool {
 		return false
 	}
 	session := filepath.Dir(path)
-	if !filepath.IsAbs(path) || filepath.Dir(session) != updateWorkDir(exe) || !strings.HasPrefix(filepath.Base(session), "session-") || !strings.HasPrefix(filepath.Base(path), "healthy-") {
+	if !filepath.IsAbs(path) || !sameUpdatePath(filepath.Dir(session), updateWorkDir(exe)) || !strings.HasPrefix(filepath.Base(session), "session-") || !strings.HasPrefix(filepath.Base(path), "healthy-") {
 		return false
 	}
 	var tx updateTransaction
-	if readUpdateJSON(filepath.Join(session, "transaction.json"), &tx) != nil || tx.Token != token || !strings.EqualFold(tx.Target, exe) || tx.Version != appVersion {
+	if readUpdateJSON(filepath.Join(session, "transaction.json"), &tx) != nil || tx.Token != token || !sameUpdatePath(tx.Target, exe) || tx.Version != appVersion {
 		return false
 	}
 	hash, err := fileSHA256(exe)
@@ -102,7 +102,7 @@ func automaticUpdateRestart() bool {
 	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) != nil {
 		return false
 	}
-	return strings.EqualFold(windows.UTF16ToString(buf[:n]), filepath.Join(session, "updater.exe"))
+	return sameUpdatePath(windows.UTF16ToString(buf[:n]), filepath.Join(session, "updater.exe"))
 }
 
 var automaticUpdateStart sync.Once
@@ -114,11 +114,7 @@ func canonicalUpdateExecutable() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	p, err = filepath.EvalSymlinks(p)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Abs(p)
+	return canonicalUpdatePath(p)
 }
 func writeUpdateJSON(path string, value any) error {
 	b, err := json.Marshal(value)
@@ -254,7 +250,7 @@ func shouldStopForAutomaticUpdate(exe, dir string, p updateParticipant, version 
 	}
 	session := filepath.Join(dir, active.Session)
 	var tx updateTransaction
-	if readUpdateJSON(filepath.Join(session, "transaction.json"), &tx) != nil || tx.Token != active.Token || !strings.EqualFold(tx.Target, exe) || !newerRelease(version, tx.Version) {
+	if readUpdateJSON(filepath.Join(session, "transaction.json"), &tx) != nil || tx.Token != active.Token || !sameUpdatePath(tx.Target, exe) || !newerRelease(version, tx.Version) {
 		return false
 	}
 	var participants []updateParticipant
@@ -285,7 +281,7 @@ func shouldStopForAutomaticUpdate(exe, dir string, p updateParticipant, version 
 	}
 	buf := make([]uint16, 32768)
 	n := uint32(len(buf))
-	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) != nil || !strings.EqualFold(windows.UTF16ToString(buf[:n]), filepath.Join(session, "updater.exe")) {
+	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) != nil || !sameUpdatePath(windows.UTF16ToString(buf[:n]), filepath.Join(session, "updater.exe")) {
 		return false
 	}
 	if lock, err := openUpdateLock(dir); err == nil {
@@ -502,7 +498,19 @@ func handleAutomaticUpdateMode() bool {
 }
 func validateUpdateTransaction(manifest, token, helper string) (updateTransaction, error) {
 	var tx updateTransaction
-	if !filepath.IsAbs(manifest) || filepath.Base(manifest) != "transaction.json" || filepath.Base(helper) != "updater.exe" || !strings.EqualFold(filepath.Dir(helper), filepath.Dir(manifest)) {
+	if !filepath.IsAbs(manifest) {
+		return tx, errors.New("invalid helper control path")
+	}
+	var err error
+	manifest, err = longUpdatePath(manifest)
+	if err != nil {
+		return tx, err
+	}
+	helper, err = longUpdatePath(helper)
+	if err != nil {
+		return tx, err
+	}
+	if !filepath.IsAbs(manifest) || filepath.Base(manifest) != "transaction.json" || filepath.Base(helper) != "updater.exe" || !sameUpdatePath(filepath.Dir(helper), filepath.Dir(manifest)) {
 		return tx, errors.New("invalid helper control path")
 	}
 	if err := readUpdateJSON(manifest, &tx); err != nil {
@@ -521,20 +529,60 @@ func validateUpdateTransaction(manifest, token, helper string) (updateTransactio
 		return tx, err
 	}
 	session := filepath.Dir(manifest)
-	if !strings.HasPrefix(filepath.Base(session), "session-") || !strings.EqualFold(filepath.Dir(session), updateWorkDir(tx.Target)) {
+	if !strings.HasPrefix(filepath.Base(session), "session-") || !sameUpdatePath(filepath.Dir(session), updateWorkDir(tx.Target)) {
 		return tx, errors.New("transaction is outside executable update directory")
 	}
-	resolved, err := filepath.EvalSymlinks(session)
-	if err != nil || !strings.EqualFold(resolved, session) {
+	resolved, err := canonicalUpdatePath(session)
+	expanded, expandErr := longUpdatePath(session)
+	if err != nil || expandErr != nil || !strings.EqualFold(resolved, expanded) {
 		return tx, errors.New("redirected update directory")
 	}
 	actual, err := fileSHA256(helper)
 	if err != nil || actual != tx.OldHash {
 		return tx, errors.New("helper binary mismatch")
 	}
+	tx.Target, err = canonicalUpdatePath(tx.Target)
+	if err != nil {
+		return tx, err
+	}
 	return tx, nil
 }
+
+// GetLongPathName expands 8.3 aliases without resolving reparse points. Comparing
+// it with EvalSymlinks permits aliases while retaining the redirected-directory
+// check on the helper control directory.
+func longUpdatePath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	p, err := windows.UTF16PtrFromString(abs)
+	if err != nil {
+		return "", err
+	}
+	buf := make([]uint16, 32768)
+	n, err := windows.GetLongPathName(p, &buf[0], uint32(len(buf)))
+	if err != nil {
+		return "", err
+	}
+	if n == 0 || n >= uint32(len(buf)) {
+		return "", errors.New("invalid expanded update path")
+	}
+	return windows.UTF16ToString(buf[:n]), nil
+}
 func runningUpdateProcesses(target, dir string) ([]updateProcess, error) {
+	var err error
+	target, err = canonicalUpdatePath(target)
+	if err != nil {
+		return nil, err
+	}
+	shortBase := filepath.Base(target)
+	if p, e := windows.UTF16PtrFromString(target); e == nil {
+		buf := make([]uint16, 32768)
+		if n, e := windows.GetShortPathName(p, &buf[0], uint32(len(buf))); e == nil && n > 0 && n < uint32(len(buf)) {
+			shortBase = filepath.Base(windows.UTF16ToString(buf[:n]))
+		}
+	}
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, err
@@ -545,7 +593,8 @@ func runningUpdateProcesses(target, dir string) ([]updateProcess, error) {
 	var found []updateProcess
 	fail := func(err error) ([]updateProcess, error) { closeUpdateProcesses(found); return nil, err }
 	for err == nil {
-		if strings.EqualFold(windows.UTF16ToString(entry.ExeFile[:]), filepath.Base(target)) {
+		name := windows.UTF16ToString(entry.ExeFile[:])
+		if strings.EqualFold(name, filepath.Base(target)) || strings.EqualFold(name, shortBase) {
 			h, e := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE|windows.PROCESS_TERMINATE, false, entry.ProcessID)
 			if e != nil {
 				// A snapshot can contain a process that has already disappeared.
@@ -572,7 +621,7 @@ func runningUpdateProcesses(target, dir string) ([]updateProcess, error) {
 				}
 				return fail(e)
 			}
-			if strings.EqualFold(windows.UTF16ToString(buf[:size]), target) {
+			if sameUpdatePath(windows.UTF16ToString(buf[:size]), target) {
 				created, e := processCreated(h)
 				if e != nil {
 					windows.CloseHandle(h)
@@ -630,10 +679,10 @@ func automaticUpdateHealthy() {
 		return
 	}
 	var tx updateTransaction
-	if !filepath.IsAbs(path) || filepath.Dir(filepath.Dir(path)) != updateWorkDir(exe) || !strings.HasPrefix(filepath.Base(filepath.Dir(path)), "session-") || !strings.HasPrefix(filepath.Base(path), "healthy-") {
+	if !filepath.IsAbs(path) || !sameUpdatePath(filepath.Dir(filepath.Dir(path)), updateWorkDir(exe)) || !strings.HasPrefix(filepath.Base(filepath.Dir(path)), "session-") || !strings.HasPrefix(filepath.Base(path), "healthy-") {
 		return
 	}
-	if readUpdateJSON(filepath.Join(filepath.Dir(path), "transaction.json"), &tx) != nil || tx.Token != token || !strings.EqualFold(tx.Target, exe) || tx.Version != appVersion {
+	if readUpdateJSON(filepath.Join(filepath.Dir(path), "transaction.json"), &tx) != nil || tx.Token != token || !sameUpdatePath(tx.Target, exe) || tx.Version != appVersion {
 		return
 	}
 	hash, err := fileSHA256(exe)
@@ -652,6 +701,10 @@ func runAutomaticUpdateHelper(manifest, token string) error {
 	if err != nil {
 		return err
 	}
+	manifest, err = canonicalUpdatePath(manifest)
+	if err != nil {
+		return err
+	}
 	session, dir := filepath.Dir(manifest), filepath.Dir(filepath.Dir(manifest))
 	var lock *os.File
 	deadline := time.Now().Add(30 * time.Second)
@@ -667,6 +720,11 @@ func runAutomaticUpdateHelper(manifest, token string) error {
 	}
 	defer closeUpdateLock(lock)
 	result := func() error {
+		// Persist the canonical target before replacement: a replacement file
+		// can receive a different 8.3 alias from the original file.
+		if err := writeUpdateJSON(manifest, tx); err != nil {
+			return err
+		}
 		created, err := processCreated(windows.CurrentProcess())
 		if err != nil {
 			return err
