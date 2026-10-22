@@ -72,7 +72,7 @@ func agentPortInUse(name string) bool {
 
 // Called only by the tray event loop; collector goroutines receive a copied selection.
 func discoverRuntimeAgents() bool {
-	if runtimeHandingOff {
+	if runtimeHandingOff || automaticUpdateRestart() {
 		return false
 	}
 	found := discoverAgents()

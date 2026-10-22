@@ -7,7 +7,7 @@ import (
 
 func TestDashboardAvailableBeforeFirstTokenScan(t *testing.T) {
 	page := renderPage(&State{}, nil)
-	for _, id := range []string{"settings-form", "agent-status", "history-chart", "forecast-state", "release-link", "app-version", "save-settings", "startup-enabled", "usage-snapshot", "token-snapshot"} {
+	for _, id := range []string{"settings-form", "agent-status", "history-chart", "forecast-state", "release-link", "app-version", "retry-settings", "startup-enabled", "usage-snapshot", "token-snapshot"} {
 		if !strings.Contains(page, `id="`+id+`"`) {
 			t.Errorf("dashboard control %q missing before first token scan", id)
 		}
