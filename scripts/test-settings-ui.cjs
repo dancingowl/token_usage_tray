@@ -90,6 +90,13 @@ async function fixture(browser, options = {}) {
     }
     // Only the page and its read-only assets can reach the running server.
     if (method !== 'GET' || url.origin !== new URL(baseURL).origin) return route.abort();
+    if (request.isNavigationRequest()) {
+      const response = await route.fetch();
+      const body = (await response.text())
+        .replace(/(<meta name="usage-tray-instance" content=")[^"]*/, '$1settings-fixture')
+        .replace(/(<meta name="usage-tray-ui" content=")[^"]*/, '$1settings-fixture');
+      return route.fulfill({ response, body });
+    }
     return route.continue();
   });
   await page.goto(new URL('/settings', baseURL).href);
@@ -123,6 +130,8 @@ async function main() {
   }
   try {
     await test('automatic settings structure and immediate toggles', {}, async ({page,state}) => {
+      assert.equal(await page.locator('#settings-feedback').isVisible(), false);
+      assert.equal(await page.locator('.settings-section').last().evaluate(el=>getComputedStyle(el).borderBottomWidth), '0px');
       assert.equal(await page.locator('#save-settings,#reset-settings,#save-startup').count(), 0);
       assert.equal(await page.locator('#settings-form #startup-enabled').count(), 1);
       assert.equal(await page.locator('header #theme-toggle').count(), 1);
@@ -131,6 +140,7 @@ async function main() {
       await field(page,'visible_claude').uncheck();await settled(page);
       await field(page,'display_window').selectOption('urgent');await settled(page);
       await page.locator('#startup-enabled').check();await settled(page);
+      assert.equal(await page.locator('#settings-feedback').isVisible(), false);
       assert.deepEqual(state.mutations.map(m=>[m.path,m.method,m.body]),[
         ['/api/settings','PATCH',{visible_agents:{claude:false}}],
         ['/api/settings','PATCH',{display_window:'urgent'}],
@@ -165,6 +175,7 @@ async function main() {
       await field(page,'display_window').selectOption('short');await settled(page);
       assert.equal(await field(page,'display_window').inputValue(),'short');
       assert.equal(await page.locator('#retry-settings').isVisible(),true);
+      assert.equal(await page.locator('#settings-feedback').isVisible(),true);
       await page.locator('#startup-enabled').check();await settled(page);
       assert.equal(state.startup.enabled,true);assert.equal(state.settings.display_window,'week');
       await page.locator('#retry-settings').click();await settled(page);

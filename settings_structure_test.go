@@ -40,7 +40,7 @@ func TestThemeMenuIsSharedByEveryPageAndOutsideSettingsForm(t *testing.T) {
 }
 
 func TestSettingsHaveAutomaticFeedbackWithoutManualSaveOrUnloadWarning(t *testing.T) {
-	for _, removed := range []string{`id="save-settings"`, `id="reset-settings"`, "beforeunload", "저장하지 않은 변경사항"} {
+	for _, removed := range []string{`id="save-settings"`, `id="reset-settings"`, "beforeunload", "저장하지 않은 변경사항", "변경사항은 자동으로 저장·반영됩니다.", `class="settings-footer"`} {
 		if strings.Contains(dashboardHTML+dashboardJS, removed) {
 			t.Errorf("obsolete manual settings flow remains: %s", removed)
 		}

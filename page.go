@@ -358,7 +358,7 @@ func renderPage(s *State, tok *TokenStats) string {
 func renderPageView(s *State, tok *TokenStats, view string) string {
 	options := tokenViewOptions{Days: 14}
 	if tok != nil && tok.ViewDays != 0 {
-		options.Days, options.All = tok.ViewDays, tok.AllRows
+		options.Days = tok.ViewDays
 	}
 	return renderPageViewWithTokenOptions(s, tok, view, options)
 }
@@ -384,7 +384,7 @@ func renderPageViewWithTokenOptions(s *State, tok *TokenStats, view string, opti
 <title>Usage Tray · ` + pageTitle + `</title>` + themeScriptTag() + `<style>` + pageCSS + dashboardCSS + tokenControlsCSS + themeCSS + themeControlCSS + `</style></head><body data-page="` + view + `">`)
 
 	fmt.Fprintf(&b, `<header><div class="header-top"><div class="brand"><img class="app-icon" src="data:image/png;base64,%s" alt="">`+
-		`<h1>Usage Tray</h1><span class="app-version" id="app-version" aria-label="현재 버전">%s</span></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신 · 자동 갱신</div>`,
+		`<h1>Usage Tray</h1><span class="app-version" id="app-version" aria-label="현재 버전">%s</span></div><div class="header-status"><div class="meta" id="snapshot-time"><span class="dot"></span>%s 갱신</div>`,
 		base64.StdEncoding.EncodeToString(faviconPNG), html.EscapeString(appVersion), s.Updated.Local().Format("15:04:05"))
 	b.WriteString(headerActionsHTML + `</div></div><p id="action-message" class="dash-message header-message" role="status" aria-live="polite"></p><nav class="page-nav" aria-label="화면 이동">`)
 	for _, item := range []struct{ view, path, label string }{
@@ -458,7 +458,7 @@ func renderPageViewWithTokenOptions(s *State, tok *TokenStats, view string, opti
 
 	b.WriteString(`<div class="row two">`)
 
-	models := mergeModelsView(s, tok, options.All)
+	models := mergeModels(s, tok)
 	fmt.Fprintf(&b, `<div class="panel"><h2>모델별 · %d일</h2><div class="table-scroll"><table>`+
 		`<tr><th>모델</th><th class="num">요청</th><th class="num">입력</th>`+
 		`<th class="num">출력</th><th class="num">캐시</th></tr>`, options.Days)
@@ -479,7 +479,7 @@ func renderPageViewWithTokenOptions(s *State, tok *TokenStats, view string, opti
 	}
 	b.WriteString(`</tfoot></table></div></div>`)
 
-	projects := mergeProjectsView(s, tok, options.All)
+	projects := mergeProjects(s, tok)
 	fmt.Fprintf(&b, `<div class="panel"><h2>프로젝트별 · %d일</h2><div class="table-scroll"><table class="projects-table">`+
 		`<tr><th>프로젝트</th><th></th><th class="num">요청</th><th class="num">토큰</th></tr>`, options.Days)
 	for _, p := range projects {
@@ -651,10 +651,6 @@ type totalRow struct {
 }
 
 func mergeModels(s *State, tok *TokenStats) []projRow {
-	return mergeModelsView(s, tok, false)
-}
-
-func mergeModelsView(s *State, tok *TokenStats, all bool) []projRow {
 	var out []projRow
 	if s.Claude.Available {
 		for _, m := range tok.Claude.Models7d {
@@ -667,9 +663,6 @@ func mergeModelsView(s *State, tok *TokenStats, all bool) []projRow {
 		}
 	}
 	sortRows(out)
-	if !all && len(out) > 6 {
-		out = out[:6]
-	}
 	return out
 }
 
@@ -747,10 +740,6 @@ func sumShown(shown []projRow, who string) Row {
 // 갈려 보여서 한눈에 "이 프로젝트에 얼마 썼나" 가 안 나왔다. 합쳐서 한 줄로 내고 어느
 // 에이전트가 쓰였는지는 마크로 보인다.
 func mergeProjects(s *State, tok *TokenStats) []projRow {
-	return mergeProjectsView(s, tok, false)
-}
-
-func mergeProjectsView(s *State, tok *TokenStats, all bool) []projRow {
 	byName := map[string]*projRow{}
 	var order []string
 	take := func(rows []NamedRow, mark agentMark) {
@@ -777,9 +766,6 @@ func mergeProjectsView(s *State, tok *TokenStats, all bool) []projRow {
 		out = append(out, *byName[name])
 	}
 	sortRows(out)
-	if !all && len(out) > 6 {
-		out = out[:6]
-	}
 	return out
 }
 

@@ -31,11 +31,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .hover-help{padding-bottom:9px;margin-bottom:-9px}
 .history-range{font-size:11px;color:var(--sub);margin:4px 0 0;overflow-wrap:anywhere}
 .history-view-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px}.history-view-controls span{font-size:12px;color:var(--sub)}#history-zoom[aria-pressed="true"]{color:#0c695d;background:#e1eeea;border-color:#a9d4c9}.history-overview{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}.history-overview svg{display:block;width:100%;height:76px}.history-overview-labels{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--sub)}
-.settings-fields{border:0;padding:0;margin:0;min-width:0}.settings-section{padding:22px 0;border-bottom:1px solid var(--line)}.settings-section:first-child{padding-top:0}.settings-section>h2{font-size:16px;color:var(--tx);margin:0 0 12px}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,auto);align-items:center;gap:10px 24px;padding:12px 0}.settings-label{font-size:13px;color:var(--tx);min-width:0}.settings-control{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}.settings-control select{width:230px;max-width:100%}.settings-row .dash-note{grid-column:1/-1;margin:0}.settings-switch{appearance:none;position:relative;flex:none;width:36px;height:22px;border:1px solid #b6c1cd;border-radius:12px;background:#dbe1e8;cursor:pointer;margin:0;vertical-align:middle}.settings-switch:before{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #20293825}.settings-switch:checked{background:#0f766e;border-color:#0f766e}.settings-switch:checked:before{left:16px}.settings-switch:disabled{opacity:.45;cursor:default}.settings-fields:disabled .settings-label{color:var(--sub)}
+.settings-fields{border:0;padding:0;margin:0;min-width:0}.settings-section{padding:22px 0;border-bottom:1px solid var(--line)}.settings-section:first-child{padding-top:0}.settings-section:last-child{border-bottom:0;padding-bottom:0}.settings-section>h2{font-size:16px;color:var(--tx);margin:0 0 12px}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,auto);align-items:center;gap:10px 24px;padding:12px 0}.settings-label{font-size:13px;color:var(--tx);min-width:0}.settings-control{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}.settings-control select{width:230px;max-width:100%}.settings-row .dash-note{grid-column:1/-1;margin:0}.settings-switch{appearance:none;position:relative;flex:none;width:36px;height:22px;border:1px solid #b6c1cd;border-radius:12px;background:#dbe1e8;cursor:pointer;margin:0;vertical-align:middle}.settings-switch:before{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #20293825}.settings-switch:checked{background:#0f766e;border-color:#0f766e}.settings-switch:checked:before{left:16px}.settings-switch:disabled{opacity:.45;cursor:default}.settings-fields:disabled .settings-label{color:var(--sub)}
 .service-options{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}.service-option{display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;cursor:pointer}.service-option input{margin:0;accent-color:#0f766e}.icon-options{display:flex;gap:6px}.icon-option{position:relative;cursor:pointer}.icon-option input{position:absolute;opacity:0;width:1px;height:1px}.icon-option-face{display:flex;align-items:center;gap:8px;min-height:38px;padding:0 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff}.icon-option input:checked+.icon-option-face{border-color:#75b4a9;color:#0c695d;background:#edf6f3}.icon-option input:focus-visible+.icon-option-face{outline:2px solid #0f766e;outline-offset:3px}.icon-option input:disabled+.icon-option-face{opacity:.5}.icon-preview{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;box-sizing:border-box}.preview-donut{border:3px solid #0f766e;border-right-color:#dce5e1;border-radius:50%;transform:rotate(-35deg)}.preview-number{font-size:17px;letter-spacing:-.06em;font-weight:750;color:#0f766e}
 .alert-service{margin-top:16px}.alert-service h3{display:flex;align-items:center;gap:10px;margin:0;padding:8px 0;font-size:13px;color:var(--tx)}.alert-service-state{font-weight:400;font-size:11px;color:var(--sub)}.alert-rule{display:grid;grid-template-columns:76px minmax(0,1fr) 36px;align-items:center;gap:10px 20px;border-top:1px solid var(--line);padding:12px 0}.alert-rule-label{font-size:13px}.alert-rule-controls{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;font-size:12px;color:var(--sub)}.alert-threshold{display:inline-flex;align-items:center;gap:6px}.alert-threshold input{width:66px;text-align:center}.alert-recovery{display:inline-flex;align-items:center;gap:6px;cursor:pointer}.alert-recovery input{margin:0;accent-color:#0f766e}.alert-rule.rule-off .alert-rule-controls{opacity:.65}.settings-row input[name=poll_minutes]{width:92px}.settings-compact{padding:5px 8px;min-height:30px;font-size:12px;background:transparent}
-.settings-footer{display:flex;align-items:center;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;background:#fff;border-top:1px solid var(--line);padding:14px 0 0;margin-top:20px}.settings-footer .dash-message{margin:0;font-size:12px;flex:1;min-width:140px}.settings-footer .dash-actions{margin-left:auto}.settings-info .dash-grid{margin-top:16px}
-@media(max-width:620px){.alert-rule{grid-template-columns:minmax(0,1fr) 36px;gap:10px}.alert-rule-controls{grid-column:1/-1;grid-row:2}.alert-rule>.settings-switch{grid-column:2;grid-row:1}.settings-row{grid-template-columns:1fr;gap:10px}.settings-row>.settings-switch{justify-self:start}.settings-control,.service-options{justify-content:flex-start}.settings-control select{width:100%}.settings-row .dash-note{grid-column:auto}.settings-footer{padding-bottom:8px}.settings-footer .dash-message{flex-basis:100%}}
+.settings-feedback{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;margin-top:16px}.settings-feedback .dash-message{margin:0;font-size:12px;flex:1;min-width:140px}.settings-info .dash-grid{margin-top:16px}
+@media(max-width:620px){.alert-rule{grid-template-columns:minmax(0,1fr) 36px;gap:10px}.alert-rule-controls{grid-column:1/-1;grid-row:2}.alert-rule>.settings-switch{grid-column:2;grid-row:1}.settings-row{grid-template-columns:1fr;gap:10px}.settings-row>.settings-switch{justify-self:start}.settings-control,.service-options{justify-content:flex-start}.settings-control select{width:100%}.settings-row .dash-note{grid-column:auto}.settings-feedback .dash-message{flex-basis:100%}}
 details>summary{cursor:pointer;font-weight:700;font-size:15px}details[open]>summary{margin-bottom:16px}.dash-status-row{padding:10px 0;border-bottom:1px solid var(--line)}.dash-status-row:last-child{border:0}.dash-status-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.dash-status-title .chip{color:var(--sub)}.dash-status-row p{margin:4px 0;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
 .dash-history-chart{width:100%;height:250px;display:block}.dash-chart-wrap{position:relative;overflow:hidden;margin:14px 0 6px}.dash-chart-point{fill:transparent;stroke:none}.dash-chart-point:focus{outline:none}
 .history-tooltip{position:absolute;z-index:2;width:280px;max-width:calc(100% - 16px);padding:12px 14px;border:1px solid #cbded8;border-radius:10px;background:#fff;box-shadow:0 4px 16px #20293820;pointer-events:none;color:var(--tx);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.history-tooltip strong{display:block;font-size:19px;color:#0f766e;margin:2px 0 5px}.history-tooltip p{margin:2px 0}.history-tooltip .tooltip-time{color:var(--sub)}
@@ -80,7 +80,7 @@ const dashboardHTML = `
     <div class="settings-row"><label class="settings-label" for="startup-enabled">로그인 시 실행</label><div class="settings-control"><button type="button" id="retry-startup" class="settings-compact" hidden>다시 확인</button><input id="startup-enabled" class="settings-switch" type="checkbox" role="switch" aria-describedby="startup-state" disabled></div><p id="startup-state" class="dash-note" role="status">자동 실행 상태를 확인하고 있습니다.</p></div>
     <div class="settings-row"><label class="settings-label" for="poll-minutes">수집 간격</label><div class="settings-control"><input id="poll-minutes" name="poll_minutes" type="number" min="1" max="60" step="any" inputmode="decimal" required aria-describedby="poll-help">분</div><p class="dash-note" id="poll-help">1~60분 · 최소 조회 간격: Claude 3분, Codex·Antigravity 2분</p></div>
    </section>
-  </fieldset><div class="settings-footer"><p id="settings-message" class="dash-message" role="status" aria-live="polite">설정을 불러오고 있습니다.</p><button type="button" id="retry-settings" class="settings-compact" hidden>실패한 변경 다시 시도</button></div></form>
+  </fieldset><div id="settings-feedback" class="settings-feedback" hidden><p id="settings-message" class="dash-message" role="status" aria-live="polite"></p><button type="button" id="retry-settings" class="settings-compact" hidden>실패한 변경 다시 시도</button></div></form>
  </div></section>
  <section id="system-details" class="panel page-section dashboard-full settings-info" aria-labelledby="system-title"><h2 id="system-title">앱 정보</h2><div class="dash-grid">
   <section aria-labelledby="status-title"><h2 id="status-title">연결 상태</h2><div id="agent-status"><p class="none">상태를 확인하고 있습니다.</p></div><p id="activity-state" class="dash-note"></p><p id="status-message" class="dash-message" role="status"></p></section>
@@ -110,7 +110,7 @@ function migrateLegacyLink() {
 }
 migrateLegacyLink();window.addEventListener('hashchange',migrateLegacyLink);
 const settingsQueue=new Map(),failedSettings=new Map(),numberTimers=new Map(),settingVersions=new Map(),settingSignatures=new Map();
-let settingsSaving=false,settingsApplied=false;
+let settingsSaving=false;
 let pausedUntil=0,metadataBusy=false,reloadPending=false,refreshWatcher=0;
 let themePreference=window.getUsageTrayTheme?window.getUsageTrayTheme():'system',themeBusy=false,themeRequest=0;
 const initialInstance=document.querySelector('meta[name="usage-tray-instance"]')?.content || '';
@@ -138,7 +138,7 @@ async function checkAppMetadata(){
  finally{metadataBusy=false;}
 }
 $('reload-app').addEventListener('click',()=>{if(!hasPendingSettings() && !settingsBusy && !mutationCount)location.reload();});
-function message(id, text, error) { const e=$(id); e.textContent=text; e.classList.toggle('error',!!error); }
+function message(id, text, error) { const e=$(id); e.textContent=text; e.classList.toggle('error',!!error); if(id==='settings-message')$('settings-feedback').hidden=!error; }
 function textNode(tag, text, className) { const e=document.createElement(tag); e.textContent=text; if(className)e.className=className; return e; }
 const tokenTooltip=textNode('div','','token-tooltip');tokenTooltip.id='token-tooltip';tokenTooltip.setAttribute('role','tooltip');tokenTooltip.hidden=true;document.body.append(tokenTooltip);
 let inspectedTokenBar=null,pinnedTokenBar=null;
@@ -268,7 +268,7 @@ function settingsStatus(){
  const invalid=form.querySelector('input:invalid');
  if(failedSettings.size)message('settings-message','일부 변경을 반영하지 못했습니다. 실패한 변경을 다시 시도해 주세요.',true);
  else if(invalid)message('settings-message','입력 범위를 확인해 주세요. 올바른 숫자를 입력하면 자동으로 반영합니다.',true);
- else message('settings-message',hasPendingSettings()?'변경사항을 반영하고 있습니다.':settingsApplied?'변경사항을 저장·반영했습니다.':'변경사항은 자동으로 저장·반영됩니다.');
+ else message('settings-message','');
  updateSettingsControls();
 }
 function renderPauseState(){const paused=pausedUntil>Date.now()/1000;$('alert-pause-state').hidden=!paused;$('alert-pause-state').textContent=paused?new Date(pausedUntil*1000).toLocaleString('ko-KR')+'까지 중지한 뒤 자동으로 알림을 재개합니다.':'';}
@@ -300,7 +300,7 @@ async function drainSettings(){
     if(!result || !result.supported || result.enabled!==action.patch.enabled)throw new Error('startup state mismatch');
     savedStartup={enabled:result.enabled,supported:result.supported};$('startup-state').hidden=true;
    }else savedSettings=await api('/api/settings','PATCH',action.patch);
-   settingsApplied=true;if(settingVersions.get(key)===action.version)failedSettings.delete(key);
+   if(settingVersions.get(key)===action.version)failedSettings.delete(key);
   }catch(e){if(settingVersions.get(key)===action.version)failedSettings.set(key,action);}
   settingsStatus();
  }}finally{settingsSaving=false;mutationCount--;settingsStatus();}
@@ -321,7 +321,7 @@ function settingsInput(event){
  }else if(event.type==='change'){const action=settingPatch(input);if(action)queueSetting(action);}
 }
 form.addEventListener('input',settingsInput);form.addEventListener('change',settingsInput);
-form.addEventListener('focusout',event=>{if(event.target.type==='number'){settingsInput({target:event.target,type:'change'});if(!event.target.checkValidity())event.target.reportValidity();}});
+form.addEventListener('focusout',event=>{if(event.target.type==='number')settingsInput({target:event.target,type:'change'});});
 form.addEventListener('submit',event=>event.preventDefault());
 function flushNumberChanges(){for(const name of Array.from(numberTimers.keys()))settingsInput({target:field(name),type:'change'});}
 document.addEventListener('click',async event=>{
@@ -628,14 +628,19 @@ async function poll() {
 }
 const tokenForm=$('token-filter-form');
 if(page==='tokens' && tokenForm){
- const options={days:$('token-days').value,model:$('token-model').value,project:$('token-project').value,all:$('token-all').checked};
+ const readTokenView=()=>({days:$('token-days').value,model:$('token-model').value,project:$('token-project').value});
+ const options=readTokenView();
  const query=new URLSearchParams(location.search),hasExplicit=['days','model','project','all'].some(key=>query.has(key)),saved=storageRead('usage-tray-token-view');
  if(!hasExplicit && saved && [7,14,30].includes(Number(saved.days))){
-  const params=new URLSearchParams({days:String(saved.days)});if(typeof saved.model==='string' && saved.model)params.set('model',saved.model);if(typeof saved.project==='string' && saved.project)params.set('project',saved.project);if(saved.all===true)params.set('all','1');
+  const params=new URLSearchParams({days:String(saved.days)});if(typeof saved.model==='string' && saved.model)params.set('model',saved.model);if(typeof saved.project==='string' && saved.project)params.set('project',saved.project);
   if(params.toString()!==new URLSearchParams({days:options.days}).toString() || options.days!==String(saved.days))location.replace('/tokens?'+params.toString());
  }
  storageWrite('usage-tray-token-view',options);
- tokenForm.addEventListener('change',()=>{storageWrite('usage-tray-token-view',{days:$('token-days').value,model:$('token-model').value,project:$('token-project').value,all:$('token-all').checked});tokenForm.requestSubmit();});
+ tokenForm.addEventListener('change',()=>{storageWrite('usage-tray-token-view',readTokenView());tokenForm.requestSubmit();});
+ $('token-reset').addEventListener('click',()=>{
+  $('token-days').value='14';$('token-model').value='';$('token-project').value='';
+  storageWrite('usage-tray-token-view',readTokenView());location.assign('/tokens?days=14');
+ });
 }
 if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();loadAutomaticUpdateStatus();}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);checkAppMetadata();setInterval(checkAppMetadata,10000);setInterval(renderPauseState,30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAppMetadata();poll();}});

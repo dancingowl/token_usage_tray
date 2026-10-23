@@ -20,19 +20,17 @@ const tokenControlsCSS = `
 #token-filter-form{display:flex;gap:8px 10px;align-items:center;flex-wrap:wrap}
 #token-filter-form>label{font-weight:600;color:var(--sub);font-size:12px}
 #token-filter-form select{max-width:230px;min-width:100px;padding:7px 26px 7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--tx);font:inherit;font-size:12px}
-#token-filter-form .token-all-label{display:flex;align-items:center;gap:5px;font-weight:500}
 #token-filter-form button{padding:7px 15px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--tx);font:inherit;font-size:12px;cursor:pointer}
 #token-controls p{margin:10px 0 0;font-size:11px}
 .token-details td a{color:inherit;text-decoration:none}
 .token-details td a:hover,.token-details td a:focus-visible{text-decoration:underline}
-@media(max-width:600px){#token-filter-form select{max-width:calc(100% - 65px)}#token-filter-form>label:not(.token-all-label){flex-basis:48px}}
+@media(max-width:600px){#token-filter-form select{max-width:calc(100% - 65px)}#token-filter-form>label{flex-basis:48px}}
 `
 
 type tokenViewOptions struct {
 	Days    int
 	Model   string
 	Project string
-	All     bool
 }
 
 func defaultTokenViewOptions(o tokenViewOptions) tokenViewOptions {
@@ -74,7 +72,7 @@ func parseTokenViewOptions(q url.Values) (tokenViewOptions, error) {
 		if len(values) != 1 || (values[0] != "0" && values[0] != "1") {
 			return o, fmt.Errorf("all must be 0 or 1")
 		}
-		o.All = values[0] == "1"
+		// Accept old bookmarks; tables now always show every matching row.
 	}
 	return o, nil
 }
@@ -87,9 +85,6 @@ func tokenViewURL(o tokenViewOptions) string {
 	}
 	if o.Project != "" {
 		q.Set("project", o.Project)
-	}
-	if o.All {
-		q.Set("all", "1")
 	}
 	return "/tokens?" + q.Encode()
 }
@@ -135,8 +130,7 @@ func tokenPeriodView(agg map[string]*Row, options tokenViewOptions, now time.Tim
 		}
 		out.Days14 = append(out.Days14, DayRow{Day: day, Row: row})
 	}
-	// Keep complete lists until both services have been merged. Only the HTML
-	// number tables truncate, so top-six mode cannot lose cross-agent projects.
+	// Keep complete lists until both services have been merged.
 	out.Models7d = topRows(models, 0)
 	out.Projects7d = topRows(projects, 0)
 	return out
@@ -197,7 +191,7 @@ func tokenViewFromCacheDir(dir string, options tokenViewOptions, now time.Time) 
 		return nil
 	}
 	o := defaultTokenViewOptions(options)
-	out := &TokenStats{Updated: claude.updated, ViewDays: o.Days, AllRows: o.All}
+	out := &TokenStats{Updated: claude.updated, ViewDays: o.Days, AllRows: true}
 	if codex.updated.After(out.Updated) {
 		out.Updated = codex.updated
 	}
@@ -259,10 +253,6 @@ func tokenControlsHTML(tok *TokenStats, options tokenViewOptions) string {
 	}
 	selectHTML("token-model", "model", "모델", o.Model, models)
 	selectHTML("token-project", "project", "프로젝트", o.Project, projects)
-	checked := ""
-	if o.All {
-		checked = ` checked`
-	}
-	fmt.Fprintf(&b, `<label class="token-all-label"><input id="token-all" type="checkbox" name="all" value="1"%s>모델·프로젝트 전체 보기</label><button type="submit">적용</button></form><p class="summary-note">선택한 기간과 필터를 모든 토큰 통계에 적용합니다. 전체 보기는 표의 상위 6개 제한을 해제합니다.</p></section>`, checked)
+	b.WriteString(`<button type="button" id="token-reset">필터 초기화</button></form></section>`)
 	return b.String()
 }

@@ -89,7 +89,7 @@ func TestThemeBootstrapAndSurfaceCoverage(t *testing.T) {
 			t.Errorf("bootstrap missing %s", want)
 		}
 	}
-	for _, want := range []string{"html{background:var(--bg)}", ".history-help-content", ".history-tooltip", ".token-tooltip", ".history-selected-point", ".history-overview rect", ".settings-footer", "button.primary", "[type=number]", "--bad:#ff9292"} {
+	for _, want := range []string{"html{background:var(--bg)}", ".history-help-content", ".history-tooltip", ".token-tooltip", ".history-selected-point", ".history-overview rect", ".icon-option-face", "button.primary", "[type=number]", "--bad:#ff9292"} {
 		if !strings.Contains(themeCSS, want) {
 			t.Errorf("theme coverage missing %s", want)
 		}

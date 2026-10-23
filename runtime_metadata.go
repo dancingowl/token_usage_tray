@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const dashboardRevision = "2026-10-23-auto-update-instant-settings"
+const dashboardRevision = "2026-10-23-simplified-dashboard-controls"
 
 var processInstanceID = newInstanceID()
 

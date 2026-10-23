@@ -91,5 +91,51 @@ async function main() {
     restoreHistoryView();saveHistoryView();
   `, preferences);
   console.log('PASS history selection restoration and unavailable browser storage');
+
+  function tokenPage(search, saved) {
+    const elements = Object.fromEntries(['token-days','token-model','token-project','token-reset','token-filter-form'].map(id => [id, {
+      value: id === 'token-days' ? '14' : '', listeners: {},
+      addEventListener(type, callback) { this.listeners[type] = callback; },
+      requestSubmit() { this.submitted = true; },
+    }]));
+    const state = { saved, redirected: '', assigned: '' };
+    const context = vm.createContext({ URLSearchParams, page: 'tokens',
+      $: id => elements[id],
+      location: { search, replace(url) { state.redirected = url; }, assign(url) { state.assigned = url; } },
+      storageRead: () => state.saved, storageWrite: (key, value) => { state.saved = value; },
+    });
+    vm.runInContext(section("const tokenForm=$('token-filter-form');", "if(page==='settings'){loadSettings();"), context);
+    return { elements, state };
+  }
+  const tokens = tokenPage('?days=7&model=chosen&all=1', { days: '30', model: 'old', project: 'old', all: false });
+  assert.equal(tokens.state.redirected, '', 'explicit URLs override stored choices');
+  tokens.elements['token-days'].value = '7';tokens.elements['token-model'].value = 'chosen';
+  tokens.elements['token-filter-form'].listeners.change();
+  assert.equal(tokens.elements['token-filter-form'].submitted, true);
+  assert.equal(tokens.state.saved.days, '7');assert.equal(tokens.state.saved.model, 'chosen');
+  tokens.elements['token-reset'].listeners.click();
+  assert.equal(tokens.state.assigned, '/tokens?days=14');
+  assert.equal(JSON.stringify(tokens.state.saved), JSON.stringify({ days: '14', model: '', project: '' }));
+  assert.equal(tokenPage('', tokens.state.saved).state.redirected, '', 'reset remains effective on revisit');
+  assert.equal(tokenPage('', { days: '30', model: 'a+b', project: 'space project', all: true }).state.redirected,
+    '/tokens?days=30&model=a%2Bb&project=space+project', 'restore filters without obsolete all flag');
+  assert.equal(tokenPage('', null).state.redirected, '');
+  console.log('PASS immediate token filters, explicit URLs, saved filters and persistent reset');
+
+  const feedback = vm.createContext({ assert });
+  vm.runInContext(`
+    const elements={'settings-message':{classList:{toggle(){}},textContent:''},'settings-feedback':{hidden:true}};
+    const $=id=>elements[id];const failedSettings=new Map();let invalid=null;
+    const form={querySelector(){return invalid;}};function updateSettingsControls(){}
+    ${section('function message(', 'function textNode(')}
+    ${section('function settingsStatus()', 'function renderPauseState(')}
+    settingsStatus();assert.equal(elements['settings-feedback'].hidden,true);
+    failedSettings.set('poll_seconds',{});settingsStatus();assert.equal(elements['settings-feedback'].hidden,false);
+    assert.match(elements['settings-message'].textContent,/다시 시도/);
+    failedSettings.clear();invalid={};settingsStatus();assert.equal(elements['settings-feedback'].hidden,false);
+    invalid=null;settingsStatus();assert.equal(elements['settings-feedback'].hidden,true);
+    assert.equal(elements['settings-message'].textContent,'');
+  `, feedback);
+  console.log('PASS settings feedback appears only for failed saves or invalid input');
 }
 main().catch(error => { console.error(error);process.exitCode=1; });
