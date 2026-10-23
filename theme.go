@@ -107,7 +107,7 @@ html{background:var(--bg)}
 :root[data-theme="dark"] .history-help>summary{border-color:var(--line)}
 :root[data-theme="dark"] .history-help[open]>summary,:root[data-theme="dark"] #history-zoom[aria-pressed="true"],:root[data-theme="dark"] .icon-option input:checked+.icon-option-face{color:var(--accent);background:#223f3a;border-color:#4a8779}
 :root[data-theme="dark"] .history-help-content,:root[data-theme="dark"] .history-tooltip,:root[data-theme="dark"] .token-tooltip{background:var(--panel2);border-color:var(--line);box-shadow:0 4px 18px #0006}
-:root[data-theme="dark"] .settings-footer,:root[data-theme="dark"] .icon-option-face{background:var(--panel)}
+:root[data-theme="dark"] .icon-option-face{background:var(--panel)}
 :root[data-theme="dark"] .settings-switch{background:#495869;border-color:#687a8f}
 :root[data-theme="dark"] .settings-switch:checked{background:#287d6e;border-color:#62b5a2}
 :root[data-theme="dark"] .service-option input,:root[data-theme="dark"] .alert-recovery input{accent-color:#6be8c4}

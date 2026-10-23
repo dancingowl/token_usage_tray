@@ -15,7 +15,7 @@ import (
 
 func TestTokenViewOptionsAndURLRoundTrip(t *testing.T) {
 	for _, days := range []int{7, 14, 30} {
-		want := tokenViewOptions{Days: days, Model: `model+<&"`, Project: `프로젝트 &?#/`, All: true}
+		want := tokenViewOptions{Days: days, Model: `model+<&"`, Project: `프로젝트 &?#/`}
 		u, err := url.Parse(tokenViewURL(want))
 		if err != nil {
 			t.Fatal(err)
@@ -28,6 +28,13 @@ func TestTokenViewOptionsAndURLRoundTrip(t *testing.T) {
 	got, err := parseTokenViewOptions(url.Values{})
 	if err != nil || got.Days != 14 {
 		t.Fatalf("default: %+v %v", got, err)
+	}
+	for _, raw := range []string{"all=0", "all=1"} {
+		q, _ := url.ParseQuery(raw)
+		legacy, err := parseTokenViewOptions(q)
+		if err != nil || legacy != got || tokenViewURL(legacy) != "/tokens?days=14" {
+			t.Fatalf("legacy all flag must not alter the view: %+v %v", legacy, err)
+		}
 	}
 	for _, raw := range []string{"days=0", "days=31", "days=14&days=7", "days=014", "all=true", "all=1&all=0", "model=x%00", "project=%FF"} {
 		q, _ := url.ParseQuery(raw)
@@ -68,7 +75,7 @@ func TestTokenPeriodsUseCalendarBoundsAndIntersectFilters(t *testing.T) {
 	}
 }
 
-func TestTokenTopSixKeepsCompleteTotalsAndMergedProjectCandidates(t *testing.T) {
+func TestTokenTablesShowAllRowsAndKeepCompleteTotals(t *testing.T) {
 	now := time.Now()
 	day := now.Format("2006-01-02")
 	claude, codex := map[string]*Row{}, map[string]*Row{}
@@ -83,18 +90,26 @@ func TestTokenTopSixKeepsCompleteTotalsAndMergedProjectCandidates(t *testing.T) 
 	s := &State{}
 	s.Claude.Available = true
 	s.Codex.Available = true
-	top := mergeProjectsView(s, tok, false)
-	all := mergeProjectsView(s, tok, true)
-	if len(top) != 6 || len(all) != 17 || top[0].Name != "shared" || top[0].total() != 181 {
-		t.Fatalf("merged projects/top limit wrong: top %+v, all %d", top, len(all))
+	projects := mergeProjects(s, tok)
+	models := mergeModels(s, tok)
+	if len(projects) != 17 || projects[0].Name != "shared" || projects[0].total() != 181 {
+		t.Fatalf("merged projects wrong: %+v", projects)
 	}
-	if len(mergeModelsView(s, tok, false)) != 6 || len(mergeModelsView(s, tok, true)) != 18 {
-		t.Fatal("all mode must expand models")
+	if len(models) != 18 {
+		t.Fatal("all matching models must be visible")
 	}
-	if !reflect.DeepEqual(agentTotals(s, tok, top), agentTotals(s, tok, all)) {
-		t.Fatal("total must not depend on top-six expansion")
+	page := renderPageViewWithTokenOptions(s, tok, "tokens", tokenViewOptions{Days: 14})
+	for _, row := range models {
+		if !strings.Contains(page, `model=`+url.QueryEscape(row.Name)) {
+			t.Fatalf("missing model drilldown for %s", row.Name)
+		}
 	}
-	totals := agentTotals(s, tok, top)
+	for _, row := range projects {
+		if !strings.Contains(page, `project=`+url.QueryEscape(row.Name)) {
+			t.Fatalf("missing project drilldown for %s", row.Name)
+		}
+	}
+	totals := agentTotals(s, tok, projects)
 	if totals[len(totals)-1].total() != 1781 {
 		t.Fatalf("Codex cached input counted twice: %+v", totals)
 	}
@@ -133,7 +148,7 @@ func TestTokenViewLoadsCombinedAndSuffixCachesWithoutDoubleCounting(t *testing.T
 	if err := os.WriteFile(filepath.Join(dir, "tokens-cache-extra.json"), []byte(`{}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	got := tokenViewFromCacheDir(dir, tokenViewOptions{Days: 30, All: true}, now)
+	got := tokenViewFromCacheDir(dir, tokenViewOptions{Days: 30}, now)
 	if got == nil || got.Claude.Total7d.Input != 30 || got.Codex.Total7d.Input != 20 || got.Codex.Total7d.total() != 20 || len(got.Claude.Days14) != 30 {
 		t.Fatalf("cache selection: %+v", got)
 	}
@@ -151,7 +166,7 @@ func TestTokenViewLoadsCombinedAndSuffixCachesWithoutDoubleCounting(t *testing.T
 
 func TestTokenControlsAndDrilldownEscapeAndPreserveOptions(t *testing.T) {
 	name := `<img src=x onerror="bad"> & +?`
-	o := tokenViewOptions{Days: 30, Model: name, Project: name, All: true}
+	o := tokenViewOptions{Days: 30, Model: name, Project: name}
 	tok := &TokenStats{Updated: time.Now(), ModelNames: []string{name}, ProjectNames: []string{name}, Claude: AgentTokens{Models7d: []NamedRow{{Name: name, Row: Row{Input: 10, Requests: 1}}}, Projects7d: []NamedRow{{Name: name, Row: Row{Input: 10, Requests: 1}}}}}
 	s := &State{}
 	s.Claude.Available = true
@@ -160,12 +175,16 @@ func TestTokenControlsAndDrilldownEscapeAndPreserveOptions(t *testing.T) {
 	if controls < 0 || snapshot < controls {
 		t.Fatal("controls must remain outside replaceable snapshot")
 	}
-	for _, want := range []string{`id="token-filter-form" method="get" action="/tokens"`, `id="token-model"`, `id="token-project"`, `id="token-all"`, `value="30" selected`, `모델별 · 30일`, `프로젝트별 · 30일`, `Claude · 30일`, `href="` + html.EscapeString(tokenViewURL(o)) + `"`} {
+	for _, want := range []string{`id="token-filter-form" method="get" action="/tokens"`, `id="token-model"`, `id="token-project"`, `id="token-reset"`, `value="30" selected`, `모델별 · 30일`, `프로젝트별 · 30일`, `Claude · 30일`, `href="` + html.EscapeString(tokenViewURL(o)) + `"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("missing %s", want)
 		}
 	}
 	if strings.Contains(page, `<img src=x`) || strings.Contains(page, `onerror="bad"`) {
 		t.Fatal("untrusted filter name escaped out of markup")
+	}
+	controlsHTML := page[controls:snapshot]
+	if strings.Contains(controlsHTML, `id="token-all"`) || strings.Contains(controlsHTML, `type="submit"`) {
+		t.Fatal("redundant filter controls must be removed")
 	}
 }
