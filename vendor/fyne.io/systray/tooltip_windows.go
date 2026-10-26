@@ -81,7 +81,7 @@ func SetClickTooltipRows(rows []ClickTooltipRow) {
 
 func (t *winTray) setClickTooltipRows(rows []ClickTooltipRow) error {
 	for _, row := range rows {
-		if strings.ContainsRune(row.Label+row.Value+row.Detail+row.Countdown+row.ResetDate+row.Status, 0) {
+		if strings.ContainsRune(row.Label+row.Value+row.Detail+row.Countdown+row.ResetDate+row.Status+row.Supplement, 0) {
 			return fmt.Errorf("click row contains NUL")
 		}
 	}

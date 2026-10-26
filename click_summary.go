@@ -75,6 +75,9 @@ func clickSummaryRowsAt(s *State, now time.Time) []systray.ClickTooltipRow {
 				appendClickStatus(&rows[start], agent.name+" 이용 제한")
 			}
 		}
+		if agent.name == "Codex" && len(rows) > start {
+			rows[len(rows)-1].Supplement = "크레딧 잔액  " + creditBalanceTextAt(agent.u, now)
+		}
 	}
 	return rows
 }

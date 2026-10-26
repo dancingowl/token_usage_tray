@@ -48,6 +48,24 @@ func TestCompactQuotaCardsOmitAbsentShortWindowAndRetainServiceMetadata(t *testi
 	}
 }
 
+func TestCompactQuotaCardsGroupPlanWithTitleAndOmitLiveNotes(t *testing.T) {
+	for _, source := range []string{"live", "api"} {
+		state := &State{Codex: emptyAgent()}
+		state.Codex.Available, state.Codex.Plan, state.Codex.Src = true, "pro", source
+		state.Codex.AgeMin = 0
+		state.Codex.Short.Left, state.Codex.Week.Left = 90, 80
+		for _, card := range gaugeCards(state) {
+			got := cardHTML(card)
+			if !strings.Contains(got, `<span class="card-plan"> · Pro</span></span></div>`) || strings.Count(got, "Pro") != 1 {
+				t.Errorf("plan must appear once beside the title: %s", got)
+			}
+			if strings.Contains(got, "실시간") || strings.Contains(got, "기록 0분 전") || strings.Contains(got, `class="card-notes"`) {
+				t.Errorf("fresh %s must not add a redundant metadata row: %s", source, got)
+			}
+		}
+	}
+}
+
 func TestTokenPageSectionSurroundsReplaceableSnapshot(t *testing.T) {
 	for _, tok := range []*TokenStats{nil, {}} {
 		page := renderPageView(&State{}, tok, "tokens")
@@ -125,5 +143,70 @@ func TestQuotaResetRowsHandleUnknownElapsedAndYearChange(t *testing.T) {
 				t.Fatalf("quota text must remain escaped: %s", got)
 			}
 		})
+	}
+}
+
+func TestCodexCreditSupplementBelongsToWeeklyQuotaCard(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	balance := 60087.10
+	for _, tt := range []struct {
+		name    string
+		credits *CreditBalance
+		want    string
+	}{
+		{"decimal", &CreditBalance{Balance: &balance, CheckedAt: now}, "60,087.10"},
+		{"missing", nil, "확인 불가"},
+		{"stale", &CreditBalance{Balance: &balance, CheckedAt: now.Add(-historyFreshness - time.Second)}, "확인 불가"},
+		{"unlimited", &CreditBalance{Unlimited: true, CheckedAt: now}, "무제한"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			state := &State{Claude: emptyAgent(), Codex: emptyAgent()}
+			state.Claude.Available, state.Codex.Available = true, true
+			state.Codex.Short.Left, state.Codex.Week.Left = 87, 74
+			state.Codex.Credits = tt.credits
+			count := 0
+			for _, card := range gaugeCards(state) {
+				got := cardHTMLAt(card, now)
+				if strings.Contains(got, `class="card-credit"`) {
+					count++
+					for _, want := range []string{`74%<span>남음</span>`, `크레딧 잔액 <strong>` + tt.want + `</strong>`} {
+						if !strings.Contains(got, want) {
+							t.Errorf("credit card missing %q: %s", want, got)
+						}
+					}
+					if card.Title != "Codex · 주간 한도" {
+						t.Fatalf("credit supplement attached to %q", card.Title)
+					}
+				}
+			}
+			if count != 1 {
+				t.Fatalf("want one weekly supplement, got %d", count)
+			}
+		})
+	}
+	zero := 0.0
+	usage := AgentUsage{Credits: &CreditBalance{Balance: &zero, CheckedAt: now}}
+	got := cardHTMLAt(gaugeCard{Title: "Codex · 주간 한도", Left: 74, Mark: markCodex, CreditUsage: &usage}, now)
+	if !strings.Contains(got, `크레딧 잔액 <strong>0.00</strong>`) || strings.Contains(got, "확인 불가") {
+		t.Fatalf("known zero was lost: %s", got)
+	}
+}
+
+func TestCreditHistoryIsContainedInExistingUsageChart(t *testing.T) {
+	for _, want := range []string{`for="history-window">항목`, `id="credit-history-summary"`, `id="history-title"`, `const compact = page==='usage'`, `if(credits){$('forecast-state').replaceChildren();return;}`} {
+		if !strings.Contains(dashboardHTML+dashboardJS, want) {
+			t.Errorf("missing existing chart integration %q", want)
+		}
+	}
+	state := &State{Codex: emptyAgent()}
+	state.Codex.Available = true
+	page := renderPageView(state, &TokenStats{}, "tokens")
+	start := strings.Index(page, `<section id="token-snapshot">`)
+	end := strings.LastIndex(page, `</section></section>`)
+	if start < 0 || end < start {
+		t.Fatal("missing token snapshot")
+	}
+	if strings.Contains(page[start:end], "크레딧") || strings.Contains(page[start:end], "credit-history") {
+		t.Fatal("credit UI added to token statistics")
 	}
 }

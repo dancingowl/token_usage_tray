@@ -170,12 +170,14 @@ type chip struct {
 }
 
 type gaugeCard struct {
-	Title   string
-	Left    int
-	Brand   color.NRGBA
-	ResetAt int64
-	Chips   []chip
-	Mark    agentMark
+	Title       string
+	Plan        string
+	Left        int
+	Brand       color.NRGBA
+	ResetAt     int64
+	Chips       []chip
+	Mark        agentMark
+	CreditUsage *AgentUsage
 }
 
 // 선택 기간의 막대 차트 — HTML/CSS. 텍스트가 축소되지 않는 것이 SVG 대신 쓰는 이유다.
@@ -273,17 +275,19 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .card-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .ct{font-weight:650;font-size:14px;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;text-align:right;margin-left:auto}
 .ct-label{overflow-wrap:anywhere}
+.card-plan{font-size:11px;font-weight:400;color:var(--sub);white-space:nowrap}
 .cl{font-size:29px;font-weight:750;line-height:1.2;white-space:nowrap;letter-spacing:-.03em}
 .cl span{font-size:12px;color:var(--sub);font-weight:500;margin-left:3px;letter-spacing:0}
 .cl.unknown{font-size:17px;color:var(--sub);font-weight:600;letter-spacing:0}
 .cl.warn{color:var(--warn)}.cl.bad{color:var(--bad)}
-.card-details{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;margin-top:12px}
-.cs{display:flex;align-items:baseline;justify-content:flex-start;gap:5px 8px;color:var(--sub);font-size:13px;flex-wrap:wrap;flex:1;min-width:0}
+.card-credit{display:flex;gap:6px;align-items:baseline;flex:0 1 auto;min-width:0;font-size:13px;color:var(--sub);overflow-wrap:anywhere}.card-credit strong{min-width:0;font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
+.card-details{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin-top:12px}
+.cs{display:flex;align-items:baseline;justify-content:flex-start;gap:5px 8px;color:var(--sub);font-size:13px;flex-wrap:wrap;flex:1 1 280px;min-width:0}
 .cs strong{font-size:14px;color:var(--tx);font-weight:750}
 .cs time{white-space:nowrap;font-variant-numeric:tabular-nums}
 .cs time:before{content:'·';margin-right:8px}
-.card-notes{color:var(--dim);font-size:11px;overflow-wrap:anywhere;text-align:right;flex:0 1 auto;max-width:40%}
-.card-note.bad{color:var(--bad)}.card-note.live{color:var(--accent)}
+.card-notes{margin-top:8px;color:var(--dim);font-size:11px;overflow-wrap:anywhere}
+.card-note.bad{color:var(--bad)}
 .chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:11px;line-height:1.3;padding:3px 7px;border-radius:6px}
 .panel{padding:17px 19px}
 .panel h2{font-size:13px;color:var(--sub);margin:0 0 14px;font-weight:650;display:flex;align-items:center;gap:8px}
@@ -508,24 +512,17 @@ func renderPageViewWithTokenOptions(s *State, tok *TokenStats, view string, opti
 // Keep service-wide metadata explicit so a limit is not mistaken for one quota's exhaustion.
 func quotaNotes(name string, u AgentUsage) []chip {
 	var notes []chip
-	if p := prettyPlan(u.Plan); p != "" {
-		notes = append(notes, chip{Text: p})
-	}
 	if u.Src != "" {
-		text := "출처 " + u.Src
-		kind := ""
-		if u.Src == "api" || u.Src == "live" {
-			text = "실시간"
-			kind = "live"
-		} else {
+		if u.Src != "api" && u.Src != "live" {
+			text := "출처 " + u.Src
 			if u.Src == "cache" {
 				text = "캐시"
 			}
 			if u.AgeMin >= 0 {
 				text += fmt.Sprintf(" · %d분 전", u.AgeMin)
 			}
+			notes = append(notes, chip{Text: text})
 		}
-		notes = append(notes, chip{Text: text, Kind: kind})
 	} else if u.AgeMin >= 0 {
 		notes = append(notes, chip{Text: "기록 " + fmtAge(u.AgeMin) + " 전"})
 	}
@@ -548,20 +545,24 @@ func gaugeCards(s *State) []gaugeCard {
 			continue
 		}
 		if w := a.usage.Short; w.Left >= 0 || w.ResetAt > 0 {
-			cards = append(cards, gaugeCard{a.mark.name + " · " + windowName(w, "5시간") + " 한도",
-				w.Left, a.mark.brand, w.ResetAt, nil, a.mark})
+			cards = append(cards, gaugeCard{Title: a.mark.name + " · " + windowName(w, "5시간") + " 한도",
+				Plan: prettyPlan(a.usage.Plan), Left: w.Left, Brand: a.mark.brand, ResetAt: w.ResetAt, Mark: a.mark})
 		}
 		w := a.usage.Week
-		cards = append(cards, gaugeCard{a.mark.name + " · " + windowName(w, "주간") + " 한도",
-			w.Left, a.mark.brand, w.ResetAt, quotaNotes(a.mark.name, a.usage), a.mark})
+		card := gaugeCard{Title: a.mark.name + " · " + windowName(w, "주간") + " 한도",
+			Plan: prettyPlan(a.usage.Plan), Left: w.Left, Brand: a.mark.brand, ResetAt: w.ResetAt, Chips: quotaNotes(a.mark.name, a.usage), Mark: a.mark}
+		if a.mark.name == "Codex" {
+			card.CreditUsage = &s.Codex
+		}
+		cards = append(cards, card)
 	}
 	if s.Antigravity.Available {
 		notes := quotaNotes("Antigravity", s.Antigravity)
 		if len(s.Antigravity.Models) == 0 {
-			cards = append(cards, gaugeCard{"Antigravity · 모델 한도", -1, colAntigravity, 0, notes, markAntigravity})
+			cards = append(cards, gaugeCard{Title: "Antigravity · 모델 한도", Plan: prettyPlan(s.Antigravity.Plan), Left: -1, Brand: colAntigravity, Chips: notes, Mark: markAntigravity})
 		}
 		for _, m := range s.Antigravity.Models {
-			cards = append(cards, gaugeCard{"Antigravity · " + m.Label + " 한도", m.Left, colAntigravity, m.ResetAt, notes, markAntigravity})
+			cards = append(cards, gaugeCard{Title: "Antigravity · " + m.Label + " 한도", Plan: prettyPlan(s.Antigravity.Plan), Left: m.Left, Brand: colAntigravity, ResetAt: m.ResetAt, Chips: notes, Mark: markAntigravity})
 		}
 	}
 	return cards
@@ -613,11 +614,24 @@ func cardHTMLAt(c gaugeCard, now time.Time) string {
 	if notes.Len() > 0 {
 		info = `<div class="card-notes">` + notes.String() + `</div>`
 	}
+	credit := ""
+	if c.CreditUsage != nil {
+		value := html.EscapeString(strings.TrimSuffix(creditBalanceTextAt(*c.CreditUsage, now), " 크레딧"))
+		expires := int64(0)
+		if c.CreditUsage.Credits != nil && !c.CreditUsage.Credits.CheckedAt.IsZero() {
+			expires = c.CreditUsage.Credits.CheckedAt.Add(historyFreshness).UnixMilli()
+		}
+		credit = `<div class="card-credit" data-credit-expires="` + fmt.Sprint(expires) + `">크레딧 잔액 <strong>` + value + `</strong></div>`
+	}
+	plan := ""
+	if c.Plan != "" {
+		plan = `<span class="card-plan"> · ` + html.EscapeString(c.Plan) + `</span>`
+	}
 	return fmt.Sprintf(`<div class="card" data-agent="%s"><div class="cbody"><div class="card-top">`+
-		`<div class="cl%s">%s</div><div class="ct">%s<span class="ct-label">%s</span></div></div>`+
-		`<div class="card-details"><div class="cs">%s</div>%s</div></div></div>`,
-		strings.ToLower(c.Mark.name), cls, left, agentIcon(c.Mark, "sm"), html.EscapeString(c.Title),
-		resetHTML, info)
+		`<div class="cl%s">%s</div><div class="ct">%s<span class="ct-label">%s%s</span></div></div>`+
+		`<div class="card-details"><div class="cs">%s</div>%s</div>%s</div></div>`,
+		strings.ToLower(c.Mark.name), cls, left, agentIcon(c.Mark, "sm"), html.EscapeString(c.Title), plan,
+		resetHTML, credit, info)
 }
 
 func statHTML(title string, m agentMark, pairs [][2]string) string {

@@ -32,20 +32,21 @@ type Window struct {
 }
 
 type AgentUsage struct {
-	Models    []Window  `json:"models,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	FetchedAt time.Time `json:"fetchedAt,omitempty"`
-	Available bool      `json:"available"`
-	OK        bool      `json:"ok"`
-	Src       string    `json:"src"` // live / api / rollout / cache
-	Short     Window    `json:"short"`
-	Week      Window    `json:"week"`
-	Limit     string    `json:"limit"`
-	Plan      string    `json:"plan"`
-	Model     string    `json:"model"`
-	Effort    string    `json:"effort"`
-	AgeMin    int       `json:"ageMin"` // -1 = 모름, 0 = 방금
-	Extra     string    `json:"extra"`
+	Credits   *CreditBalance `json:"credits,omitempty"`
+	Models    []Window       `json:"models,omitempty"`
+	Error     string         `json:"error,omitempty"`
+	FetchedAt time.Time      `json:"fetchedAt,omitempty"`
+	Available bool           `json:"available"`
+	OK        bool           `json:"ok"`
+	Src       string         `json:"src"` // live / api / rollout / cache
+	Short     Window         `json:"short"`
+	Week      Window         `json:"week"`
+	Limit     string         `json:"limit"`
+	Plan      string         `json:"plan"`
+	Model     string         `json:"model"`
+	Effort    string         `json:"effort"`
+	AgeMin    int            `json:"ageMin"` // -1 = 모름, 0 = 방금
+	Extra     string         `json:"extra"`
 }
 
 func emptyAgent() AgentUsage {
@@ -290,7 +291,8 @@ type codexWindow struct {
 }
 
 type codexUsageResp struct {
-	PlanType  string `json:"plan_type"`
+	Credits   json.RawMessage `json:"credits"`
+	PlanType  string          `json:"plan_type"`
 	RateLimit struct {
 		Allowed      bool         `json:"allowed"`
 		LimitReached bool         `json:"limit_reached"`
@@ -304,6 +306,7 @@ func fetchCodex() AgentUsage {
 	u := emptyAgent()
 	u.Available = true
 	tok, acct := codexToken()
+	u.Credits = &CreditBalance{CheckedAt: time.Now(), Account: creditAccountFingerprint(acct)}
 	if tok == "" {
 		logf("codex: 토큰 없음")
 		return u
@@ -328,6 +331,7 @@ func fetchCodex() AgentUsage {
 		}
 	}
 	u.Src = "live"
+	u.Credits = parseCreditBalance(r.Credits, acct, time.Now())
 	u.Plan = r.PlanType
 	if r.RateLimit.LimitReached {
 		u.Limit = "rate_limit"
@@ -351,7 +355,8 @@ func fetchCodex() AgentUsage {
 			u.Short = win
 		}
 	}
-	u.OK = u.Week.Left >= 0 || u.Short.Left >= 0 || u.Limit != ""
+	u.OK = u.Week.Left >= 0 || u.Short.Left >= 0 || u.Limit != "" ||
+		(u.Credits != nil && (u.Credits.Unlimited || u.Credits.Balance != nil))
 	u.AgeMin = 0
 	u.FetchedAt = time.Now()
 	u.Model, u.Effort = codexConfigDefaults()

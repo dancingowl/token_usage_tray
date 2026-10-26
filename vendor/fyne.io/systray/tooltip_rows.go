@@ -9,4 +9,6 @@ type ClickTooltipRow struct {
 	// Status adds a separate line for stale data, elapsed resets, or limits.
 	// Detail remains the fallback for callers without structured reset data.
 	Countdown, ResetDate, Status string
+	// Supplement is a separate, neutral detail line, such as a credit balance.
+	Supplement string
 }

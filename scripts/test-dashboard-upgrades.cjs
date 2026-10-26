@@ -79,7 +79,7 @@ async function main() {
   const preferences = vm.createContext({ assert });
   vm.runInContext(`
     const names={claude:'Claude',codex:'Codex',antigravity:'Antigravity'};
-    const elements={'history-agent':{value:'codex'},'history-window':{value:'week'},'history-days':{value:'7'}};
+    const elements={'history-agent':{value:'codex'},'history-window':{value:'week',options:[]},'history-days':{value:'7'}};
     const $=id=>elements[id];let historyZoom=true,historySelectionTouched=false,historySelectionInitialized=false;
     let saved=null;const localStorage={getItem(){return saved;},setItem(key,value){saved=value;}};
     ${section('function storageRead(', 'restoreHistoryView();')}

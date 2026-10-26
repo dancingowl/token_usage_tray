@@ -15,13 +15,15 @@ import (
 // Percentages are quota percentages, not token estimates. Only actual provider
 // observations enter the history; serving the same cached observation adds nothing.
 type usageHistorySample struct {
-	At      time.Time `json:"at"`
-	Agent   string    `json:"agent"`
-	Window  string    `json:"window"`
-	Left    int       `json:"left"`
-	ResetAt int64     `json:"reset_at"`
-	WindowS int64     `json:"window_seconds"`
-	Source  string    `json:"source"`
+	At            time.Time `json:"at"`
+	Agent         string    `json:"agent"`
+	Window        string    `json:"window"`
+	Left          int       `json:"left"`
+	ResetAt       int64     `json:"reset_at"`
+	WindowS       int64     `json:"window_seconds"`
+	Source        string    `json:"source"`
+	Balance       *float64  `json:"balance,omitempty"`
+	CreditAccount string    `json:"credit_account,omitempty"`
 }
 
 type usageForecast struct {
@@ -84,6 +86,11 @@ func historyAgentUsage(s *State, agent string) AgentUsage {
 }
 
 func validHistorySample(s usageHistorySample, now time.Time) bool {
+	if s.Window == "credits" {
+		return s.Agent == "codex" && !s.At.IsZero() && !s.At.After(now) && !s.At.Before(now.Add(-historyRetention)) &&
+			((s.Source == "live" && s.Balance != nil && validCreditBalance(*s.Balance)) ||
+				(s.Source == "unavailable" && s.Balance == nil))
+	}
 	return (s.Agent == "claude" || s.Agent == "codex" || s.Agent == "antigravity") &&
 		(s.Window == "short" || s.Window == "week") && s.Left >= 0 && s.Left <= 100 &&
 		!s.At.IsZero() && !s.At.After(now) && !s.At.Before(now.Add(-historyRetention)) &&
@@ -99,11 +106,14 @@ func normalizeHistory(samples []usageHistorySample, now time.Time) []usageHistor
 		if samples[i].Agent != samples[j].Agent {
 			return samples[i].Agent < samples[j].Agent
 		}
-		return samples[i].Window < samples[j].Window
+		if samples[i].Window != samples[j].Window {
+			return samples[i].Window < samples[j].Window
+		}
+		return samples[i].CreditAccount < samples[j].CreditAccount
 	})
 	type sampleKey struct {
-		agent, window string
-		at            int64
+		agent, window, creditAccount string
+		at                           int64
 	}
 	seen := make(map[sampleKey]bool, len(samples))
 	out := make([]usageHistorySample, 0, len(samples))
@@ -111,7 +121,11 @@ func normalizeHistory(samples []usageHistorySample, now time.Time) []usageHistor
 		if !validHistorySample(s, now) {
 			continue
 		}
-		key := sampleKey{s.Agent, s.Window, s.At.UnixNano()}
+		account := ""
+		if s.Window == "credits" {
+			account = s.CreditAccount
+		}
+		key := sampleKey{s.Agent, s.Window, account, s.At.UnixNano()}
 		if seen[key] {
 			continue
 		}
@@ -189,6 +203,14 @@ func recordUsageHistory(s *State) error {
 			continue
 		}
 		u := historyAgentUsage(s, agent)
+		if agent == "codex" && u.Credits != nil {
+			c := u.Credits
+			sample := usageHistorySample{At: c.CheckedAt, Agent: "codex", Window: "credits", Source: "unavailable", CreditAccount: c.Account}
+			if !c.Unlimited && c.Balance != nil && validCreditBalance(*c.Balance) {
+				sample.Balance, sample.Source = c.Balance, "live"
+			}
+			samples = append(samples, sample)
+		}
 		if !u.OK || !freshHistorySource(u.Src) || u.FetchedAt.IsZero() || now.Sub(u.FetchedAt) > historyFreshness {
 			continue
 		}

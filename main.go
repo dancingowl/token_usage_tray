@@ -208,6 +208,8 @@ func keepLastGood(cur, prev AgentUsage, prevAt time.Time) AgentUsage {
 		return cur
 	}
 	out := prev
+	// Quota fallback must not turn a failed credit lookup into a current balance.
+	out.Credits = cur.Credits
 	out.Src = "직전값"
 	if prev.FetchedAt.IsZero() {
 		prev.FetchedAt = prevAt
@@ -814,6 +816,9 @@ func agentLinesAt(name string, a *AgentUsage, d lineDetail) []string {
 	}
 	if a.Short.Left >= 0 || a.Short.ResetAt > 0 {
 		lines = append(lines, windowLineAt(windowName(a.Short, a.Short.Label), a.Short, d))
+	}
+	if name == "Codex" && d == detailFull {
+		lines = append(lines, "크레딧 잔액  "+creditBalanceTextAt(*a, time.Now()))
 	}
 	var notes []string
 	if a.Error != "" && d == detailFull {
