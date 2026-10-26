@@ -117,3 +117,30 @@ func TestClickSummaryStructuredResetColumnsAndExceptions(t *testing.T) {
 		t.Fatalf("unknown reset columns: %+v", unknown)
 	}
 }
+
+func TestClickSummaryCreditsAreSeparateAndUnknownIsNotZero(t *testing.T) {
+	now := time.Date(2026, 10, 26, 15, 0, 0, 0, time.UTC)
+	balance := 60087.0958375
+	s := State{Claude: AgentUsage{Available: true, Short: Window{Left: -1}, Week: Window{Left: 90}},
+		Codex: AgentUsage{Available: true, Short: Window{Left: 50}, Week: Window{Left: 70},
+			Credits: &CreditBalance{Balance: &balance, CheckedAt: now}}}
+	rows := clickSummaryRowsAt(&s, now)
+	if len(rows) != 3 || rows[0].Supplement != "" || rows[1].Supplement != "" || rows[2].Supplement != "크레딧 잔액  60,087.10 크레딧" {
+		t.Fatalf("credit balance must appear once below Codex quota: %+v", rows)
+	}
+	if rows[2].Remaining != 70 || rows[2].Value != "70% 남음" {
+		t.Fatal("credits must not change quota value or severity")
+	}
+	balance = 0
+	if got := clickSummaryRowsAt(&s, now)[2].Supplement; got != "크레딧 잔액  0.00 크레딧" {
+		t.Fatalf("real zero lost: %s", got)
+	}
+	s.Codex.Credits = &CreditBalance{CheckedAt: now}
+	if got := clickSummaryRowsAt(&s, now)[2].Supplement; got != "크레딧 잔액  확인 불가" {
+		t.Fatalf("failed lookup must be unknown: %s", got)
+	}
+	s.Codex.Credits = &CreditBalance{Balance: &balance, CheckedAt: now.Add(-historyFreshness - time.Minute)}
+	if got := clickSummaryRowsAt(&s, now)[2].Supplement; got != "크레딧 잔액  확인 불가" {
+		t.Fatalf("stale balance must be unknown: %s", got)
+	}
+}

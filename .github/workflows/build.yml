@@ -95,6 +95,7 @@ jobs:
       - name: 대시보드 회귀 검사
         run: |
           node scripts/test-history-bins.cjs
+          node scripts/test-credit-history.cjs
           node scripts/test-dashboard-upgrades.cjs
           node scripts/test-settings-queue.cjs
 

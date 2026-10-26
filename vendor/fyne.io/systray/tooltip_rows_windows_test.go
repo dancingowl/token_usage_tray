@@ -34,7 +34,7 @@ func TestClickRowsSnapshotAndModeTransitions(t *testing.T) {
 	if next[0].Value != "0% 남음" {
 		t.Fatal("snapshot aliases tray state")
 	}
-	for _, invalid := range []ClickTooltipRow{{Label: "invalid\x00"}, {Countdown: "invalid\x00"}, {ResetDate: "invalid\x00"}, {Status: "invalid\x00"}} {
+	for _, invalid := range []ClickTooltipRow{{Label: "invalid\x00"}, {Countdown: "invalid\x00"}, {ResetDate: "invalid\x00"}, {Status: "invalid\x00"}, {Supplement: "invalid\x00"}} {
 		if err := tray.setClickTooltipRows([]ClickTooltipRow{invalid}); err == nil {
 			t.Fatal("NUL accepted")
 		}
@@ -132,7 +132,7 @@ func TestNativeCompactRowsPaintingDPIAndLifetime(t *testing.T) {
 	defer tray.destroyClickTooltip()
 	tip.rows = []ClickTooltipRow{
 		{Label: "Codex · 5시간 한도", Value: "0% 남음", Countdown: "2시간 후 초기화", ResetDate: "10/15(목) 18:00", Status: "캐시 12분 전 · 한도 도달", Remaining: 0},
-		{Label: "Codex · 주간 한도", Value: "18% 남음", Countdown: "5일 3시간 후 초기화", ResetDate: "10/20(화) 13:58", Remaining: 18},
+		{Label: "Codex · 주간 한도", Value: "18% 남음", Countdown: "5일 3시간 후 초기화", ResetDate: "10/20(화) 13:58", Remaining: 18, Supplement: "크레딧 잔액  60,087.10 크레딧"},
 		{Label: "Claude · 5시간 한도", Value: "42% 남음", Detail: "10/15(목) 20:00 초기화 · 4시간 후", Remaining: 42},
 		{Label: "Claude · 주간 한도", Value: "확인 중", Detail: "초기화 정보 없음", Remaining: -1},
 	}

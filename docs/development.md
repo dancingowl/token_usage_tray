@@ -113,11 +113,13 @@ macOS에서는 `export USAGE_TRAY_DATA_DIR="${TMPDIR}token-usage-tray-dev"`로 �
 node scripts/test-history-bins.cjs
 node scripts/test-dashboard-upgrades.cjs
 node scripts/test-settings-queue.cjs
+node scripts/test-credit-history.cjs
 ```
 
 두 번째 검증은 재시작 감지, 다른 탭이 시작한 갱신 작업의 추적,
 조회 조건 복원과 브라우저 저장소 차단 시 동작을 네트워크 없이 확인합니다.
 세 번째 검증은 직렬 설정 저장 큐의 빠른 연속 변경·경합·실패 재시도와 숫자 입력 지연 저장을 확인합니다.
+크레딧 검증은 숫자 축·0·소수·실패 구간·계정 변경·기간별 증감과 기존 그래프 통합을 확인합니다.
 
 설정 UI는 `scripts/test-settings-ui.cjs`로 검증합니다. Node.js와 `playwright` 또는 `playwright-core`, Chromium 계열 브라우저가 필요합니다.
 앱의 `/settings` HTML과 읽기 전용 정적 자산을 받아야 하므로 **별도 터미널에서 앱 서버를 먼저 실행**합니다.
@@ -141,6 +143,19 @@ node scripts/test-settings-ui.cjs
 생략하면 스크립트가 `playwright`, 다음으로 `playwright-core`를 일반 Node 모듈 탐색으로 찾습니다.
 macOS도 같은 변수 이름을 `export`로 지정하고 설치한 Playwright CLI로 `install chromium` 후 Node 스크립트를 실행합니다.
 선택 변수 `SCREENSHOT_DIR`은 데스크톱·320px 화면 스크린샷을 저장할 폴더입니다.
+
+크레딧 UI는 같은 Playwright 설정으로 아래처럼 검증합니다. 전용 임시 폴더에 합성 HTML·이력만 만들고
+모든 브라우저 요청을 가로채므로 실행 중인 앱·자격증명·실제 설정에 접근하지 않습니다.
+
+```powershell
+$env:CREDIT_UI_FIXTURES_DIR = Join-Path $env:TEMP 'usage-tray-credit-ui-fixtures'
+New-Item -ItemType Directory -Force -Path $env:CREDIT_UI_FIXTURES_DIR | Out-Null
+go test -run '^TestWriteCreditUIFixtures$' .
+node scripts/test-credit-ui.cjs
+```
+
+크레딧 잔액의 정보 표시, 항목 선택으로 그래프 전환, 0·조회 불가·오래된 값·무제한, 요약 보기,
+좁은 화면과 오프라인 잔액 만료를 검증하고 스크린샷을 해당 임시 폴더에 저장합니다.
 
 UI 테스트는 `/api/*`와 `/state.json` 요청을 모두 mock합니다. 설정·자동 실행·테마 저장도 브라우저 안의 fixture만 변경합니다.
 테마 fixture는 `/api/theme` GET/PUT과 `/api/meta`를 지원하며, 전체 설정 PUT은 별도로 저장한 테마를 보존합니다.

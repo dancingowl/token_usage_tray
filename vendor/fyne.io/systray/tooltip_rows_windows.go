@@ -94,6 +94,9 @@ func (layout clickRowsLayout) rowHeight(row ClickTooltipRow) int32 {
 	if row.Status != "" {
 		height += layout.detailHeight
 	}
+	if row.Supplement != "" {
+		height += layout.detailHeight
+	}
 	return height
 }
 
@@ -112,13 +115,15 @@ func (tip *trackingTooltip) measureRows() clickRowsLayout {
 			countdown := clickMeasureText(dc, tip.rowCountdownFont(row), left)
 			date := clickMeasureText(dc, tip.detailFont, right)
 			status := clickMeasureText(dc, tip.detailFont, row.Status)
+			supplement := clickMeasureText(dc, tip.detailFont, row.Supplement)
 			layout.firstHeight = clickMax32(layout.firstHeight, value.Bottom)
-			layout.detailHeight = clickMax32(layout.detailHeight, label.Bottom, countdown.Bottom, date.Bottom, status.Bottom)
+			layout.detailHeight = clickMax32(layout.detailHeight, label.Bottom, countdown.Bottom, date.Bottom, status.Bottom, supplement.Bottom)
 			layout.width = clickMax32(layout.width,
 				value.Right+actions+layout.gap+2*layout.padding+2,
 				label.Right+2*layout.padding+2,
 				countdown.Right+date.Right+2*layout.padding+2,
-				status.Right+2*layout.padding+2)
+				status.Right+2*layout.padding+2,
+				supplement.Right+2*layout.padding+2)
 		}
 	}
 	// Each quota has a value, reset information, and service label. Exceptional
@@ -190,6 +195,10 @@ func (tip *trackingTooltip) drawRows(dc uintptr, client tooltipRect) bool {
 		if row.Status != "" {
 			detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
 			clickDrawRowText(dc, tip.detailFont, row.Status, detail, colors.detail, 0)
+		}
+		if row.Supplement != "" {
+			detail.Top, detail.Bottom = detail.Bottom, detail.Bottom+layout.detailHeight
+			clickDrawRowText(dc, tip.detailFont, row.Supplement, detail, colors.text, 0)
 		}
 		y = detail.Bottom + layout.gap
 	}

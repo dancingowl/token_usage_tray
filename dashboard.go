@@ -52,9 +52,10 @@ const headerActionsHTML = `<div class="dash-actions quick-toolbar"><button type=
 const dashboardHTML = `
 <div class="dashboard">
  <div id="app-update-banner" class="app-update-banner" hidden role="status"><p id="app-update-message"></p><button type="button" id="reload-app">화면 갱신</button></div>
- <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>기록 구간 확대를 켜면 위에는 선택 기간 전체와 확대 위치를, 아래에는 기록이 있는 구간을 크게 보여줍니다. 버튼을 다시 누르면 전체 기간 보기로 돌아갑니다.</p><p>각 시간 구간의 마지막 관측 잔량을 표시하며 확대 범위에 맞춰 간격을 조절합니다. 원본 기록은 보존하고 초기화 전후와 빈 구간은 잇지 않습니다. 호버·터치·탭 키로 상세를 확인하고 Esc로 닫습니다.</p><p>소진 예상은 원본 기록의 최근 소비 속도에 따른 추정입니다.</p></div></details></div>
-  <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">한도<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
+ <section id="history-details" class="panel page-section dashboard-full" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">잔여량 추이<span id="history-context" class="summary-note">이력 · 예상 소진</span></h2><details id="history-help" class="history-help"><summary aria-label="그래프 도움말" title="그래프 도움말">?</summary><div class="history-help-content"><p>기록 구간 확대를 켜면 위에는 선택 기간 전체와 확대 위치를, 아래에는 기록이 있는 구간을 크게 보여줍니다. 버튼을 다시 누르면 전체 기간 보기로 돌아갑니다.</p><p>각 시간 구간의 마지막 관측 잔량을 표시하며 확대 범위에 맞춰 간격을 조절합니다. 원본 기록은 보존하고 초기화 전후와 빈 구간은 잇지 않습니다. 호버·터치·탭 키로 상세를 확인하고 Esc로 닫습니다.</p><p>크레딧은 정기 한도와 별도로 집계하는 잔액이며 충전이나 계정 변경으로 증가할 수 있습니다. 확인 실패와 계정 변경 전후는 잇지 않습니다. 소진 예상은 한도 기록에만 표시합니다.</p></div></details></div>
+  <div class="history-controls"><label for="history-agent">에이전트<select id="history-agent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="antigravity">Antigravity</option></select></label><label for="history-window">항목<select id="history-window"><option value="short">단기 · 5시간</option><option value="week">주간</option></select></label><label for="history-days">기간<select id="history-days"><option value="1">최근 1일</option><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label></div>
   <div class="history-view-controls"><span id="history-view-label">전체 기간</span><button type="button" id="history-zoom" aria-pressed="true" aria-controls="history-chart history-overview" disabled>기록 구간 확대</button></div>
+  <p id="credit-history-summary" class="dash-note" hidden role="status"></p>
   <div id="history-overview" class="history-overview" hidden></div>
   <p id="history-message" class="dash-message" role="status" aria-live="polite">기록을 불러오고 있습니다.</p><div id="history-chart" class="dash-chart-wrap"></div>
  </section>
@@ -118,13 +119,24 @@ const initialUI=document.querySelector('meta[name="usage-tray-ui"]')?.content ||
 let knownInstance=initialInstance,knownUI=initialUI;
 function storageRead(key,fallback=null){try{return JSON.parse(localStorage.getItem(key)) ?? fallback;}catch(e){return fallback;}}
 function storageWrite(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch(e){/* Preferences remain usable when browser storage is unavailable. */}}
+const historyQuotaWindows={claude:'week',codex:'week',antigravity:'week'};
+function historyWindowAllowed(agent,item){return ['short','week'].includes(item) || agent==='codex' && item==='credits';}
+function syncHistoryWindows(preferred){
+ const agent=$('history-agent').value,select=$('history-window'),item=preferred || select.value;
+ const credit=Array.from(select.options).find(option=>option.value==='credits');
+ if(agent==='codex' && !credit){const option=textNode('option','크레딧 잔액');option.value='credits';select.append(option);}
+ if(agent!=='codex' && credit)credit.remove();
+ select.value=historyWindowAllowed(agent,item)?item:historyQuotaWindows[agent] || 'week';
+ if(select.value!=='credits')historyQuotaWindows[agent]=select.value;
+}
 function saveHistoryView(){storageWrite('usage-tray-history-view',{agent:$('history-agent').value,window:$('history-window').value,days:Number($('history-days').value),zoom:historyZoom});}
 function restoreHistoryView(){
  const saved=storageRead('usage-tray-history-view');if(!saved || typeof saved!=='object')return;
- if(Object.prototype.hasOwnProperty.call(names,saved.agent) && ['short','week'].includes(saved.window)){$('history-agent').value=saved.agent;$('history-window').value=saved.window;historySelectionTouched=true;historySelectionInitialized=true;}
+ if(Object.prototype.hasOwnProperty.call(names,saved.agent) && historyWindowAllowed(saved.agent,saved.window)){$('history-agent').value=saved.agent;syncHistoryWindows(saved.window);historySelectionTouched=true;historySelectionInitialized=true;}
  if([1,7,30].includes(saved.days))$('history-days').value=String(saved.days);if(typeof saved.zoom==='boolean')historyZoom=saved.zoom;
 }
 restoreHistoryView();
+syncHistoryWindows();
 function showReloadNotice(text){$('app-update-message').textContent=text;$('app-update-banner').hidden=false;$('reload-app').disabled=hasPendingSettings() || settingsBusy || mutationCount>0;}
 async function checkAppMetadata(){
  if(metadataBusy || document.hidden)return;metadataBusy=true;const themeAtStart=themeRequest;
@@ -139,6 +151,13 @@ async function checkAppMetadata(){
 }
 $('reload-app').addEventListener('click',()=>{if(!hasPendingSettings() && !settingsBusy && !mutationCount)location.reload();});
 function message(id, text, error) { const e=$(id); e.textContent=text; e.classList.toggle('error',!!error); if(id==='settings-message')$('settings-feedback').hidden=!error; }
+function expireCreditBalances(){
+ for(const link of document.querySelectorAll('[data-credit-expires]')){
+  if(Date.now()>Number(link.dataset.creditExpires)){
+   link.querySelector('strong').textContent='확인 불가';
+  }
+ }
+}
 function textNode(tag, text, className) { const e=document.createElement(tag); e.textContent=text; if(className)e.className=className; return e; }
 const tokenTooltip=textNode('div','','token-tooltip');tokenTooltip.id='token-tooltip';tokenTooltip.setAttribute('role','tooltip');tokenTooltip.hidden=true;document.body.append(tokenTooltip);
 let inspectedTokenBar=null,pinnedTokenBar=null;
@@ -426,10 +445,32 @@ function historyZoomRange(samples,full) {
  const start=Math.max(full.start,first-padding),end=Math.min(full.end,last+padding);
  return {start,end,interval:historyInterval(end-start)};
 }
-function historyCycleChanged(a,b) {return a.reset_at!==b.reset_at || a.window_seconds!==b.window_seconds;}
+function historyIsCredit(sample){return sample.window==='credits';}
+function historyValue(sample){return historyIsCredit(sample)?sample.balance:sample.left;}
+function historyValid(sample){const value=historyValue(sample);return Number.isFinite(value) && value>=0 && (historyIsCredit(sample)?sample.source==='live':value<=100);}
+function historyCycleChanged(a,b) {return historyIsCredit(a) || historyIsCredit(b)?!a.credit_account || !b.credit_account || a.credit_account!==b.credit_account || Date.parse(b.at)-Date.parse(a.at)>30*60000:a.reset_at!==b.reset_at || a.window_seconds!==b.window_seconds;}
+function creditNumber(value){return value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function creditAxisLabel(value){return value>=1e12?value.toExponential(1):value>=1000000?value.toLocaleString('en-US',{notation:'compact',maximumFractionDigits:1}):value.toLocaleString('en-US',{maximumFractionDigits:2});}
+function historyScale(samples,credits){
+ let max=credits?1:100;if(credits)for(const sample of samples)if(historyValid(sample))max=Math.max(max,sample.balance);
+ return {max,ratio:sample=>historyValue(sample)/max,ticks:[0,.25,.5,.75,1].map(ratio=>({ratio,value:max*ratio}))};
+}
+function creditHistoryChanges(samples){
+ let previous=null,decrease=0,increase=0,pairs=0;
+ for(const sample of samples){
+  if(!historyValid(sample)){previous=null;continue;}
+  if(previous && !historyCycleChanged(previous,sample)){
+   const change=sample.balance-previous.balance;
+   if(change<0)decrease+=-change;else increase+=change;pairs++;
+  }
+  previous=sample;
+ }
+ return {decrease,increase,pairs};
+}
 function historyBins(samples,interval) {
  const bins=[];let previous=null,segment=0;
  for(const sample of samples){
+  if(!historyValid(sample)){segment++;previous=null;continue;}
   if(previous && historyCycleChanged(previous,sample))segment++;
   const bucket=Math.floor(new Date(sample.at).getTime()/interval),last=bins[bins.length-1];
   if(last && last.bucket===bucket && last.segment===segment){last.s=sample;last.count++;}
@@ -468,7 +509,8 @@ function attachHistoryDetails(chart,svg,points,dots,range) {
  function show(p){
   const matrix=svg.getScreenCTM();if(!matrix)return;
   const s=p.s,source=({live:'실시간',api:'실시간',cache:'캐시',local:'로컬 기록'})[s.source] || s.source || '미확인';
-  tooltip.replaceChildren(textNode('p','마지막 관측 · '+timeLabel(s.at),'tooltip-time'),textNode('strong',s.left+'% 남음'),textNode('p','출처 · '+source),textNode('p','초기화 · '+(s.reset_at>0?timeLabel(s.reset_at*1000):'미확인')));
+  tooltip.replaceChildren(textNode('p','마지막 관측 · '+timeLabel(s.at),'tooltip-time'),textNode('strong',historyIsCredit(s)?creditNumber(s.balance)+' 크레딧':s.left+'% 남음'),textNode('p','출처 · '+source));
+  if(!historyIsCredit(s))tooltip.append(textNode('p','초기화 · '+(s.reset_at>0?timeLabel(s.reset_at*1000):'미확인')));
   tooltip.hidden=false;guide.style.display='';marker.style.display='';guide.setAttribute('x1',p.x);guide.setAttribute('x2',p.x);marker.setAttribute('cx',p.x);marker.setAttribute('cy',p.y);
   const position=new DOMPoint(p.x,p.y).matrixTransform(matrix),bounds=chart.getBoundingClientRect();
   const x=position.x-bounds.left,y=position.y-bounds.top;
@@ -479,8 +521,9 @@ function attachHistoryDetails(chart,svg,points,dots,range) {
  function inspect(event){
   const matrix=svg.getScreenCTM();if(!matrix)return;
   const pos=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
-  if(pos.x<48 || pos.x>range.width-18 || pos.y<20 || pos.y>180){hide();return;}
-  const at=range.start+(pos.x-48)/(range.width-66)*(range.end-range.start),bucket=Math.floor(at/range.interval);
+  const left=range.left || 48;
+  if(pos.x<left || pos.x>range.width-18 || pos.y<20 || pos.y>180){hide();return;}
+  const at=range.start+(pos.x-left)/(range.width-left-18)*(range.end-range.start),bucket=Math.floor(at/range.interval);
   const candidates=points.filter(p=>p.bucket===bucket);
   if(!candidates.length){hide();return;}
   const nearest=candidates.reduce((best,p)=>Math.abs(p.x-pos.x)<Math.abs(best.x-pos.x)?p:best,candidates[0]);
@@ -495,58 +538,63 @@ function attachHistoryDetails(chart,svg,points,dots,range) {
   dot.addEventListener('blur',()=>{focused=null;hide();});
  }
 }
-function drawHistoryOverview(samples,full,zoom,days) {
+function drawHistoryOverview(samples,full,zoom,days,scale) {
  const container=$('history-overview');container.hidden=false;container.replaceChildren();
  const width=Math.max(200,container.clientWidth-26),height=76;
  const x=at=>4+(at-full.start)/(full.end-full.start)*(width-8);
  const svg=svgElement('svg',{viewBox:'0 0 '+width+' '+height,role:'img','aria-label':'최근 '+days+'일 전체 기간. 색칠된 영역이 아래 확대 구간입니다.','data-start':full.start,'data-end':full.end});
  svg.append(svgElement('rect',{x:4,y:4,width:width-8,height:68,rx:4,fill:'#edf1f4'}));
  const selected=svgElement('rect',{x:x(zoom.start),y:4,width:Math.max(.5,x(zoom.end)-x(zoom.start)),height:68,fill:'#d2ebe3',stroke:'#69a995','stroke-width':1,class:'history-zoom-window','data-start':zoom.start,'data-end':zoom.end});svg.append(selected);
- const points=historyBins(samples,full.interval).map(bin=>({...bin,x:x(new Date(bin.s.at).getTime()),y:68-bin.s.left*.6}));let segment=[];
+ const points=historyBins(samples,full.interval).map(bin=>({...bin,x:x(new Date(bin.s.at).getTime()),y:68-scale.ratio(bin.s)*60}));let segment=[];
  function line(){if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':1.2}));segment=[];}
- points.forEach((p,i)=>{if(i&&(p.segment!==points[i-1].segment||p.bucket-points[i-1].bucket>1))line();segment.push(p);});line();
+ points.forEach((p,i)=>{if(i&&(p.segment!==points[i-1].segment||!historyIsCredit(p.s)&&p.bucket-points[i-1].bucket>1))line();segment.push(p);});line();
  const labels=textNode('div','','history-overview-labels');labels.append(textNode('span',historyShortDate(full.start)),textNode('span',historyShortDate(full.end)));
  container.append(textNode('div','최근 '+days+'일 전체 · 색칠한 구간 확대','history-range'),svg,labels);
 }
 function drawHistory() {
- if(!historyData)return;
- const agent=$('history-agent').value, windowName=$('history-window').value;
+ const agent=$('history-agent').value, windowName=$('history-window').value,credits=windowName==='credits';
+ $('usage-plan').hidden=credits;
+ $('history-context').textContent=credits?'이력 · 잔액 변화':'이력 · 예상 소진';
  $('usage-plan-context').textContent=names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도');
+ if(!historyData){$('credit-history-summary').replaceChildren();$('credit-history-summary').hidden=true;return;}
  const full=historyRange(historyData.displayDays,historyData.rangeEnd);
- const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && new Date(s.at).getTime()>=full.start && new Date(s.at).getTime()<=full.end).sort((a,b)=>new Date(a.at)-new Date(b.at));
- const zoom=historyZoomRange(samples,full),canZoom=zoom.start>full.start || zoom.end<full.end,zoomed=historyZoom && canZoom;
+ const samples=(historyData.samples || []).filter(s=>s.agent===agent && s.window===windowName && (credits || historyValid(s)) && new Date(s.at).getTime()>=full.start && new Date(s.at).getTime()<=full.end).sort((a,b)=>new Date(a.at)-new Date(b.at));
+ const observations=samples.filter(historyValid),scale=historyScale(observations,credits),itemLabel=credits?'크레딧 잔액':windowName==='week'?'주간 한도':'단기 한도';
+ const summary=$('credit-history-summary');summary.hidden=!credits;if(credits){const changes=creditHistoryChanges(samples);summary.textContent=changes.pairs?'선택 기간 잔액 감소량 '+creditNumber(changes.decrease)+' 크레딧 · 증가량 '+creditNumber(changes.increase)+' 크레딧 · 비교 가능한 관측 사이의 변화 합계':'선택 기간의 잔액 변화를 비교할 기록이 부족합니다.';}
+ const zoom=historyZoomRange(observations,full),canZoom=zoom.start>full.start || zoom.end<full.end,zoomed=historyZoom && canZoom;
  const {start,end,interval}=zoomed?zoom:full;
  $('history-zoom').disabled=!canZoom;$('history-zoom').setAttribute('aria-pressed',String(zoomed));
  $('history-view-label').textContent=zoomed?'기록 구간 확대':'최근 '+historyData.displayDays+'일 전체';
  $('history-overview').hidden=true;$('history-overview').replaceChildren();
- if(zoomed)drawHistoryOverview(samples,full,zoom,historyData.displayDays);
+ if(zoomed)drawHistoryOverview(samples,full,zoom,historyData.displayDays,scale);
  const chart=$('history-chart'), focusedAt=chart.contains(document.activeElement)?document.activeElement.dataset.at:null;
  dismissHistoryDetails();dismissHistoryDetails=()=>{};chart.replaceChildren();
- if(samples.length<2)message('history-message',samples.length===1?'기록이 1개입니다. 추이를 보려면 2개 이상의 기록이 필요합니다.':'이 기간에 수집한 기록이 없습니다. 앱이 실행되는 동안 기록이 쌓입니다.');
- else message('history-message',samples.length+'개 기록 · '+names[agent]+' · '+(windowName==='week'?'주간 한도':'단기 한도'));
+ if(observations.length<2)message('history-message',observations.length===1?'기록이 1개입니다. 추이를 보려면 2개 이상의 기록이 필요합니다.':'이 기간에 수집한 기록이 없습니다. 앱이 실행되는 동안 기록이 쌓입니다.');
+ else message('history-message',observations.length+'개 기록 · '+names[agent]+' · '+itemLabel);
  {
-  const width=Math.max(240,chart.clientWidth), plotWidth=width-66;
-  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 230',class:'dash-history-chart',role:'group','aria-label':names[agent]+(zoomed?' 기록 구간 확대':' 최근 '+historyData.displayDays+'일')+' 잔여 한도 이력','data-start':start,'data-end':end,'data-interval':interval});
-  for(const pct of [0,25,50,75,100]) { const y=180-pct*1.6;svg.append(svgElement('line',{x1:48,y1:y,x2:width-18,y2:y,stroke:'#dce3eb','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#626b78','font-size':12});label.textContent=pct+'%';svg.append(label); }
+  const width=Math.max(240,chart.clientWidth),left=credits?78:48,plotWidth=width-left-18;
+  const svg=svgElement('svg',{viewBox:'0 0 '+width+' 230',class:'dash-history-chart',role:'group','aria-label':names[agent]+(zoomed?' 기록 구간 확대':' 최근 '+historyData.displayDays+'일')+' '+itemLabel+' 이력','data-start':start,'data-end':end,'data-interval':interval});
+  for(const tick of scale.ticks) { const y=180-tick.ratio*160;svg.append(svgElement('line',{x1:left,y1:y,x2:width-18,y2:y,stroke:'#dce3eb','stroke-dasharray':'3 4'})); const label=svgElement('text',{x:4,y:y+4,fill:'#626b78','font-size':12});label.textContent=credits?creditAxisLabel(tick.value):tick.value+'%';svg.append(label); }
   const bins=historyBins(samples,interval);
-  if(samples.length>1)message('history-message',historyIntervalLabel(interval)+' 간격 · 구간별 마지막 잔량 · '+bins.length+'개 표시 / '+samples.length+'개 기록');
-  const points=bins.map(bin=>({...bin,x:end===start?48+plotWidth/2:48+(new Date(bin.s.at).getTime()-start)/(end-start)*plotWidth,y:180-bin.s.left*1.6})), dots=[];let segment=[];
+  if(observations.length>1)message('history-message',historyIntervalLabel(interval)+' 간격 · 구간별 마지막 '+(credits?'잔액':'잔량')+' · '+bins.length+'개 표시 / '+observations.length+'개 기록');
+  const points=bins.map(bin=>({...bin,x:end===start?left+plotWidth/2:left+(new Date(bin.s.at).getTime()-start)/(end-start)*plotWidth,y:180-scale.ratio(bin.s)*160})), dots=[];let segment=[];
   function line() { if(segment.length>1)svg.append(svgElement('polyline',{points:segment.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#0f766e','stroke-width':1.5,'vector-effect':'non-scaling-stroke'}));segment=[]; }
-  points.forEach((p,index)=>{if(index && (p.segment!==points[index-1].segment || p.bucket-points[index-1].bucket>1))line();segment.push(p);});line();
-  for(const p of points) { const label='구간 마지막 관측 · '+timeLabel(p.s.at)+' · '+p.s.left+'% 남음 · 출처 '+(p.s.source || '미확인')+' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인');const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,tabindex:0,class:'dash-chart-point','aria-label':label,'data-at':p.s.at});svg.append(dot);dots.push({dot,point:p}); }
+  points.forEach((p,index)=>{if(index && (p.segment!==points[index-1].segment || !credits && p.bucket-points[index-1].bucket>1))line();segment.push(p);});line();
+  for(const p of points) { const label='구간 마지막 관측 · '+timeLabel(p.s.at)+' · '+(credits?creditNumber(p.s.balance)+' 크레딧':p.s.left+'% 남음')+' · 출처 '+(p.s.source || '미확인')+(credits?'':' · 초기화 '+(p.s.reset_at>0?timeLabel(p.s.reset_at*1000):'미확인'));const dot=svgElement('circle',{cx:p.x,cy:p.y,r:4,tabindex:0,class:'dash-chart-point','aria-label':label,'data-at':p.s.at});svg.append(dot);dots.push({dot,point:p}); }
   const tickCount=Math.max(2,Math.min(6,Math.floor(plotWidth/90)));
   for(let i=0;i<=tickCount;i++){
-   const at=start+(end-start)*i/tickCount,x=48+plotWidth*i/tickCount,d=new Date(at);
+   const at=start+(end-start)*i/tickCount,x=left+plotWidth*i/tickCount,d=new Date(at);
    const tick=svgElement('text',{x,y:202,fill:'#626b78','font-size':11,'text-anchor':i===0?'start':i===tickCount?'end':'middle',class:'history-tick'});
    const date=svgElement('tspan',{x});date.textContent=(d.getMonth()+1)+'/'+d.getDate();tick.append(date);
    if(end-start<=2*86400000){const clock=svgElement('tspan',{x,dy:15});clock.textContent=historyShortDate(at,false);tick.append(clock);}
    svg.append(tick);
   }
-  if(!points.length){const empty=svgElement('text',{x:48+plotWidth/2,y:102,'text-anchor':'middle',fill:'#626b78','font-size':12});empty.textContent='기록 없음';svg.append(empty);}
+  if(!points.length){const empty=svgElement('text',{x:left+plotWidth/2,y:102,'text-anchor':'middle',fill:'#626b78','font-size':12});empty.textContent='기록 없음';svg.append(empty);}
   chart.append(svg);
-  if(points.length)attachHistoryDetails(chart,svg,points,dots,{start,end,interval,width});
+  if(points.length)attachHistoryDetails(chart,svg,points,dots,{start,end,interval,width,left});
   if(focusedAt){const target=dots.reduce((best,item)=>Math.abs(new Date(item.point.s.at)-new Date(focusedAt))<Math.abs(new Date(best.point.s.at)-new Date(focusedAt))?item:best,dots[0]);if(target)target.dot.focus({preventScroll:true});}
  }
+ if(credits){$('forecast-state').replaceChildren();return;}
  const forecast=(historyData.forecasts || []).find(f=>f.agent===agent && f.window===windowName), box=$('forecast-state');box.replaceChildren();box.classList.remove('risk');
  const pace=usagePaceAdvice(forecast);
  const ready=!!(forecast && forecast.ready && Number.isFinite(forecast.rate_per_day) && forecast.rate_per_day>0);
@@ -596,7 +644,7 @@ function drawHistory() {
 }
 async function loadHistory() {
  const request=++historyRequest,days=Number($('history-days').value);
- if(historyData && historyData.displayDays!==days){historyData=null;dismissHistoryDetails();$('history-chart').replaceChildren();$('history-overview').hidden=true;$('history-overview').replaceChildren();$('history-zoom').disabled=true;$('history-zoom').setAttribute('aria-pressed','false');$('history-view-label').textContent='최근 '+days+'일 전체';message('history-message','기록을 불러오고 있습니다.');$('forecast-state').replaceChildren(textNode('p','예측 정보를 불러오고 있습니다.'));}
+ if(historyData && historyData.displayDays!==days){historyData=null;dismissHistoryDetails();$('history-chart').replaceChildren();$('credit-history-summary').replaceChildren();$('credit-history-summary').hidden=true;$('history-overview').hidden=true;$('history-overview').replaceChildren();$('history-zoom').disabled=true;$('history-zoom').setAttribute('aria-pressed','false');$('history-view-label').textContent='최근 '+days+'일 전체';message('history-message','기록을 불러오고 있습니다.');$('forecast-state').replaceChildren(textNode('p','예측 정보를 불러오고 있습니다.'));}
  try {
   const data=await api('/api/history?days='+days);if(request!==historyRequest)return;
   const serverEnd=Date.parse(data.range_end);historyData={...data,displayDays:days,rangeEnd:Number.isFinite(serverEnd)?serverEnd:Date.now()};
@@ -604,14 +652,14 @@ async function loadHistory() {
    historySelectionInitialized=true;
    if(!historySelectionTouched) {
     const latest=(data.samples || []).filter(s=>Object.prototype.hasOwnProperty.call(names,s.agent) && ['short','week'].includes(s.window) && Number.isFinite(s.left) && s.left>=0 && s.left<=100 && !isNaN(new Date(s.at))).reduce((last,s)=>!last || new Date(s.at)>new Date(last.at)?s:last,null);
-    if(latest) { $('history-agent').value=latest.agent;$('history-window').value=latest.window; }
+    if(latest) { $('history-agent').value=latest.agent;syncHistoryWindows(latest.window); }
    }
   }
   drawHistory();
  }
  catch(e) { if(request===historyRequest)message('history-message',historyData?'기록을 불러오지 못했습니다. 표시된 그래프는 직전 조회 결과입니다.':'기록을 불러오지 못했습니다. 기간을 다시 선택해 주세요.',true); }
 }
-$('history-agent').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();drawHistory();});$('history-window').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();drawHistory();});$('history-days').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();loadHistory();});
+$('history-agent').addEventListener('change',()=>{historySelectionTouched=true;syncHistoryWindows(historyQuotaWindows[$('history-agent').value]);saveHistoryView();drawHistory();});$('history-window').addEventListener('change',()=>{historySelectionTouched=true;syncHistoryWindows();saveHistoryView();drawHistory();});$('history-days').addEventListener('change',()=>{historySelectionTouched=true;saveHistoryView();loadHistory();});
 $('history-zoom').addEventListener('click',()=>{historyZoom=!historyZoom;saveHistoryView();drawHistory();});
 let chartResizeFrame=0;
 window.addEventListener('resize',()=>{if(page!=='usage' || compact)return;cancelAnimationFrame(chartResizeFrame);chartResizeFrame=requestAnimationFrame(drawHistory);});
@@ -619,6 +667,7 @@ async function refreshSnapshots() {
  const res=await fetch(location.pathname+location.search,{cache:'no-store'});if(!res.ok)throw new Error('snapshot');const doc=new DOMParser().parseFromString(await res.text(),'text/html');
  const ids=page==='usage'?['usage-snapshot','snapshot-time']:page==='tokens'?['token-snapshot','snapshot-time']:['snapshot-time'];
  for(const id of ids) { const source=doc.getElementById(id), target=$(id);if(source && target){if(id==='token-snapshot')dismissTokenDetails();target.replaceChildren(...Array.from(source.childNodes));} }
+ expireCreditBalances();
 }
 async function poll() {
  if(polling || document.hidden || mutationCount)return;polling=true;
@@ -642,7 +691,7 @@ if(page==='tokens' && tokenForm){
   storageWrite('usage-tray-token-view',readTokenView());location.assign('/tokens?days=14');
  });
 }
-if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();loadAutomaticUpdateStatus();}else if(page==='usage' && !compact){loadHistory();}setInterval(poll,30000);checkAppMetadata();setInterval(checkAppMetadata,10000);setInterval(renderPauseState,30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAppMetadata();poll();}});
+if(page==='settings'){loadSettings();loadStartup();loadSettingsContext();loadStatus();loadAutomaticUpdateStatus();}else if(page==='usage' && !compact){loadHistory();}expireCreditBalances();setInterval(expireCreditBalances,30000);setInterval(poll,30000);checkAppMetadata();setInterval(checkAppMetadata,10000);setInterval(renderPauseState,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){expireCreditBalances();checkAppMetadata();poll();}});
 })();
 `
